@@ -1,455 +1,578 @@
 "use client"
 
-import type React from "react"
+/* ---------------------------------------------------------------------------
+   SAMPLE DATA GENERATOR
+   ---------------------------------------------------------------------------
+   • Generates several realistic datasets, each seeded with intentional issues
+     so users can practise validation and cleaning.
+   • Works completely client-side; if a Groq/AI call fails or you are offline
+     the sample generator still functions.
+   • Emits a FileData object (declared in app/page.tsx) via the
+     onSampleDataGenerated callback.
+   • Provides clear, non-technical descriptions so every user understands
+     what the dataset teaches.
+-----------------------------------------------------------------------------*/
 
 import { useState } from "react"
-import { Users, ShoppingCart, Briefcase, GraduationCap } from "lucide-react"
+import type React from "react"
+import { Users, ShoppingCart, Briefcase, GraduationCap, RefreshCcw, Download } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import { Card, CardHeader, CardDescription, CardTitle, CardContent, CardFooter } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useToast } from "@/hooks/use-toast"
+
 import type { FileData, DataAnalysisResult } from "@/app/page"
 
-// ============================================================================
-// COMPONENT PROPS AND INTERFACES
-// ============================================================================
+/* ---------------------------------------------------------------------------
+   PROPS & INTERNAL TYPES
+-----------------------------------------------------------------------------*/
 
-/**
- * Props for the SampleDataGenerator component
- */
 interface SampleDataGeneratorProps {
-  onSampleDataGenerated: (file: FileData) => void // Callback when sample data is generated
+  onSampleDataGenerated: (file: FileData) => void
 }
 
-/**
- * Structure for sample dataset definitions
- * Each sample dataset has metadata and generation logic
- */
+type Difficulty = "Beginner" | "Intermediate" | "Advanced"
+
 interface SampleDataset {
-  id: string // Unique identifier
-  name: string // Display name
-  description: string // What this dataset represents
-  icon: React.ComponentType<any> // Icon component
-  difficulty: "Beginner" | "Intermediate" | "Advanced" // Complexity level
-  learningObjectives: string[] // What users will learn
-  commonIssues: string[] // Types of data quality issues included
-  rowCount: number // Number of rows to generate
-  generateData: () => any[] // Function to generate the actual data
-  headers: string[] // Column headers
+  id: string
+  name: string
+  description: string
+  icon: React.ComponentType<any>
+  difficulty: Difficulty
+  learningObjectives: string[]
+  commonIssues: string[]
+  rowCount: number
+  headers: string[]
+  generateData: () => any[]
 }
 
-/**
- * SampleDataGenerator Component
- *
- * This component provides educational sample datasets for users to practice with.
- * Each dataset is designed to demonstrate specific data quality issues and validation scenarios.
- *
- * Features:
- * - Multiple realistic datasets (Customer, Sales, Employee, Student)
- * - Intentionally includes common data quality issues
- * - Educational content with learning objectives
- * - Different difficulty levels for progressive learning
- */
-export function SampleDataGenerator({ onSampleDataGenerated }: SampleDataGeneratorProps) {
-  // ============================================================================
-  // STATE MANAGEMENT
-  // ============================================================================
-  
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [selectedDataset, setSelectedDataset] = useState<string | null>(null)
+/* ---------------------------------------------------------------------------
+   RANDOM HELPERS
+-----------------------------------------------------------------------------*/
 
-  // ============================================================================
-  // SAMPLE DATA GENERATION FUNCTIONS
-  // ============================================================================
-  
-  /**
-   * Generate realistic customer data with intentional quality issues
-   * Issues included: Invalid emails, missing phone numbers, inconsistent formats
-   */
-  const generateCustomerData = (): any[] => {
-    const firstNames = ["John", "Jane", "Mike", "Sarah", "David", "Lisa", "Tom", "Anna", "Chris", "Emma", "", "Bob"]
-    const lastNames = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "", "Wilson"]
-    const domains = ["gmail.com", "yahoo.com", "hotmail.com", "company.com", "invalid", "@broken", "test"]
-    const cities = ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix", "", "Miami", "Seattle"]
-    const states = ["NY", "CA", "IL", "TX", "AZ", "FL", "WA", "", "INVALID"]
+const rand = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)]
 
-    return Array.from({ length: 500 }, (_, i) => {
-      const firstName = firstNames[Math.floor(Math.random() * firstNames.length)]
-      const lastName = lastNames[Math.floor(Math.random() * lastNames.length)]
-      const domain = domains[Math.floor(Math.random() * domains.length)]
-      
-      // Intentionally create some invalid emails
-      let email = ""
-      if (firstName && lastName && domain) {
-        if (domain === "invalid") {
-          email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}@` // Missing domain
-        } else if (domain === "@broken") {
-          email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}broken.com` // Missing @
-        } else {
-          email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}@${domain}`
-        }
-      }
+const randBetween = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min
 
-      // Generate phone numbers with various formats and some invalid ones
-      let phone = ""
-      const phoneFormats = [
-        () => `(${Math.floor(Math.random() * 900) + 100}) ${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}`,
-        () => `${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}`,
-        () => `${Math.floor(Math.random() * 9000000000) + 1000000000}`,
-        () => "123", // Invalid - too short
-        () => "", // Missing
-      ]
-      phone = phoneFormats[Math.floor(Math.random() * phoneFormats.length)]()
+/* ---------------------------------------------------------------------------
+   DATA GENERATION HELPERS (one per dataset)
+-----------------------------------------------------------------------------*/
 
-      // Generate ages with some unrealistic values
-      let age = Math.floor(Math.random() * 80) + 18
-      if (Math.random() < 0.05) age = -5 // Some negative ages
-      if (Math.random() < 0.03) age = 150 // Some unrealistic ages
+const generateCustomerData = (): any[] => {
+  const firstNames = ["John", "Jane", "Mike", "Sarah", "David", "Lisa", "Tom", "Anna", "Chris", "Emma", "", "Bob"]
+  const lastNames = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "", "Wilson"]
+  const domains = ["gmail.com", "yahoo.com", "hotmail.com", "company.com", "invalid", "@broken", "test"]
+  const cities = ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix", "", "Miami", "Seattle"]
+  const states = ["NY", "CA", "IL", "TX", "AZ", "FL", "WA", "", "INVALID"]
 
-      return {
-        customer_id: `CUST${String(i + 1).padStart(4, '0')}`,
-        first_name: firstName,
-        last_name: lastName,
-        email: email,
-        phone: phone,
-        age: age,
-        city: cities[Math.floor(Math.random() * cities.length)],
-        state: states[Math.floor(Math.random() * states.length)],
-        registration_date: new Date(2020 + Math.floor(Math.random() * 4), Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1).toISOString().split('T')[0],
-        status: Math.random() > 0.1 ? (Math.random() > 0.5 ? "Active" : "Inactive") : "", // Some missing status
-      }
-    })
-  }
+  return Array.from({ length: 500 }, (_, i) => {
+    const firstName = rand(firstNames)
+    const lastName = rand(lastNames)
+    const domain = rand(domains)
 
-  /**
-   * Generate sales transaction data with various data quality issues
-   * Issues included: Negative amounts, future dates, missing product info
-   */
-  const generateSalesData = (): any[] => {
-    const products = ["Laptop", "Mouse", "Keyboard", "Monitor", "Headphones", "", "Tablet", "Phone", "Charger"]
-    const salespeople = ["Alice Johnson", "Bob Smith", "Carol Davis", "", "David Wilson", "Eve Brown"]
-    const regions = ["North", "South", "East", "West", "", "Central"]
-
-    return Array.from({ length: 800 }, (_, i) => {
-      // Generate amounts with some negative values (returns/errors)
-      let amount = Math.floor(Math.random() * 2000) + 50
-      if (Math.random() < 0.08) amount = -amount // Some negative amounts
-      if (Math.random() < 0.03) amount = 0 // Some zero amounts
-
-      // Generate dates with some in the future (data entry errors)
-      let saleDate = new Date(2023, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1)
-      if (Math.random() < 0.05) {
-        saleDate = new Date(2025, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1) // Future dates
-      }
-
-      // Generate quantities with some unrealistic values
-      let quantity = Math.floor(Math.random() * 10) + 1
-      if (Math.random() < 0.04) quantity = 0 // Zero quantity
-      if (Math.random() < 0.02) quantity = -2 // Negative quantity
-
-      return {
-        transaction_id: `TXN${String(i + 1).padStart(5, '0')}`,
-        product_name: products[Math.floor(Math.random() * products.length)],
-        quantity: quantity,
-        unit_price: Math.floor(Math.random() * 500) + 10,
-        total_amount: amount,
-        sale_date: saleDate.toISOString().split('T')[0],
-        salesperson: salespeople[Math.floor(Math.random() * salespeople.length)],
-        region: regions[Math.floor(Math.random() * regions.length)],
-        customer_id: `CUST${String(Math.floor(Math.random() * 500) + 1).padStart(4, '0')}`,
-        payment_method: Math.random() > 0.1 ? (Math.random() > 0.5 ? "Credit Card" : "Cash") : "", // Some missing
-      }
-    })
-  }
-
-  /**
-   * Generate employee data with HR-related data quality issues
-   * Issues included: Salary inconsistencies, invalid hire dates, missing departments
-   */
-  const generateEmployeeData = (): any[] => {
-    const departments = ["Engineering", "Marketing", "Sales", "HR", "Finance", "", "Operations", "Support"]
-    const positions = ["Manager", "Senior", "Junior", "Lead", "Director", "", "Analyst", "Specialist"]
-    const firstNames = ["Alex", "Jordan", "Taylor", "Casey", "Morgan", "Riley", "", "Avery", "Quinn"]
-    const lastNames = ["Anderson", "Thompson", "Martinez", "Robinson", "", "Clark", "Rodriguez", "Lewis"]
-
-    return Array.from({ length: 300 }, (_, i) => {
-      const firstName = firstNames[Math.floor(Math.random() * firstNames.length)]
-      const lastName = lastNames[Math.floor(Math.random() * lastNames.length)]
-      
-      // Generate hire dates with some inconsistencies
-      let hireDate = new Date(2015 + Math.floor(Math.random() * 8), Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1)
-      if (Math.random() < 0.03) {
-        hireDate = new Date(2025, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1) // Future hire dates
-      }
-
-      // Generate salaries with some unrealistic values
-      let salary = Math.floor(Math.random() * 100000) + 30000
-      if (Math.random() < 0.05) salary = -salary // Negative salaries
-      if (Math.random() < 0.02) salary = 0 // Zero salary
-      if (Math.random() < 0.01) salary = 10000000 // Unrealistically high
-
-      // Generate ages with some issues
-      let age = Math.floor(Math.random() * 40) + 22
-      if (Math.random() < 0.03) age = 16 // Too young to work full-time
-      if (Math.random() < 0.02) age = 80 // Very old
-
-      // Generate years of experience with some inconsistencies
-      const currentYear = new Date().getFullYear()
-      const yearsAtCompany = currentYear - hireDate.getFullYear()
-      let totalExperience = yearsAtCompany + Math.floor(Math.random() * 10)
-      if (Math.random() < 0.05) totalExperience = yearsAtCompany - 2 // Less experience than time at company
-
-      return {
-        employee_id: `EMP${String(i + 1).padStart(4, '0')}`,
-        first_name: firstName,
-        last_name: lastName,
-        email: firstName && lastName ? `${firstName.toLowerCase()}.${lastName.toLowerCase()}@company.com` : "",
-        department: departments[Math.floor(Math.random() * departments.length)],
-        position: positions[Math.floor(Math.random() * positions.length)],
-        hire_date: hireDate.toISOString().split('T')[0],
-        salary: salary,
-        age: age,
-        years_experience: totalExperience,
-        status: Math.random() > 0.05 ? "Active" : (Math.random() > 0.5 ? "Inactive" : "On Leave"),
-      }
-    })
-  }
-
-  /**
-   * Generate student academic data with educational data quality issues
-   * Issues included: Invalid GPAs, inconsistent grade formats, missing enrollment data
-   */
-  const generateStudentData = (): any[] => {
-    const majors = ["Computer Science", "Business", "Engineering", "Psychology", "Biology", "", "Mathematics", "Art"]
-    const grades = ["A", "B", "C", "D", "F", "", "A+", "B-", "PASS", "FAIL", "85", "92", "INVALID"]
-    const firstNames = ["Emma", "Liam", "Olivia", "Noah", "Ava", "William", "", "Sophia", "James", "Isabella"]
-    const lastNames = ["Johnson", "Williams", "Brown", "Jones", "Garcia", "", "Miller", "Davis", "Rodriguez"]
-
-    return Array.from({ length: 600 }, (_, i) => {
-      const firstName = firstNames[Math.floor(Math.random() * firstNames.length)]
-      const lastName = lastNames[Math.floor(Math.random() * lastNames.length)]
-      
-      // Generate GPAs with some invalid values
-      let gpa = Math.round((Math.random() * 4) * 100) / 100
-      if (Math.random() < 0.05) gpa = 5.2 // Invalid - too high
-      if (Math.random() < 0.03) gpa = -1.5 // Invalid - negative
-      if (Math.random() < 0.02) gpa = null // Missing
-
-      // Generate enrollment dates with some issues
-      let enrollmentDate = new Date(2020 + Math.floor(Math.random() * 4), Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1)
-      if (Math.random() < 0.04) {
-        enrollmentDate = new Date(2025, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1) // Future enrollment
-      }
-
-      // Generate graduation dates with some inconsistencies
-      let graduationDate = new Date(enrollmentDate.getFullYear() + 4, 5, 15) // 4 years later
-      if (Math.random() < 0.06) {
-        graduationDate = new Date(enrollmentDate.getFullYear() - 1, 5, 15) // Graduation before enrollment
-      }
-
-      // Generate ages with some unrealistic values
-      let age = Math.floor(Math.random() * 10) + 18
-      if (Math.random() < 0.03) age = 12 // Too young
-      if (Math.random() < 0.02) age = 65 // Unusually old for undergraduate
-
-      return {
-        student_id: `STU${String(i + 1).padStart(5, '0')}`,
-        first_name: firstName,
-        last_name: lastName,
-        email: firstName && lastName ? `${firstName.toLowerCase()}.${lastName.toLowerCase()}@university.edu` : "",
-        major: majors[Math.floor(Math.random() * majors.length)],
-        gpa: gpa,
-        enrollment_date: enrollmentDate.toISOString().split('T')[0],
-        expected_graduation: graduationDate.toISOString().split('T')[0],
-        age: age,
-        credits_completed: Math.floor(Math.random() * 120),
-        current_grade: grades[Math.floor(Math.random() * grades.length)],
-        status: Math.random() > 0.08 ? (Math.random() > 0.7 ? "Enrolled" : "Graduated") : "", // Some missing
-      }
-    })
-  }
-
-  // ============================================================================
-  // SAMPLE DATASET DEFINITIONS
-  // ============================================================================
-  
-  /**
-   * Array of available sample datasets with their configurations
-   * Each dataset is designed to teach specific data validation concepts
-   */
-  const sampleDatasets: SampleDataset[] = [
-    {
-      id: "customers",
-      name: "Customer Database",
-      description: "Customer information with contact details and demographics",
-      icon: Users,
-      difficulty: "Beginner",
-      rowCount: 500,
-      headers: ["customer_id", "first_name", "last_name", "email", "phone", "age", "city", "state", "registration_date", "status"],
-      learningObjectives: [
-        "Identify and fix invalid email formats",
-        "Handle missing contact information",
-        "Validate age ranges and demographic data",
-        "Clean inconsistent phone number formats",
-      ],
-      commonIssues: [
-        "Invalid email addresses (missing @ or domain)",
-        "Missing first/last names",
-        "Inconsistent phone number formats",
-        "Unrealistic age values (negative or too high)",
-        "Empty city/state fields",
-      ],
-      generateData: generateCustomerData,
-    },
-    {
-      id: "sales",
-      name: "Sales Transactions",
-      description: "Sales data with products, amounts, and transaction details",
-      icon: ShoppingCart,
-      difficulty: "Intermediate",
-      rowCount: 800,
-      headers: ["transaction_id", "product_name", "quantity", "unit_price", "total_amount", "sale_date", "salesperson", "region", "customer_id", "payment_method"],
-      learningObjectives: [
-        "Detect negative transaction amounts",
-        "Identify future-dated transactions",
-        "Validate quantity and pricing relationships",
-        "Handle missing product information",
-      ],
-      commonIssues: [
-        "Negative transaction amounts (returns vs errors)",
-        "Future sale dates (data entry errors)",
-        "Zero or negative quantities",
-        "Missing product names",
-        "Inconsistent salesperson names",
-      ],
-      generateData: generateSalesData,
-    },
-    {
-      id: "employees",
-      name: "Employee Records",
-      description: "HR data with salaries, departments, and employment history",
-      icon: Briefcase,
-      difficulty: "Advanced",
-      rowCount: 300,
-      headers: ["employee_id", "first_name", "last_name", "email", "department", "position", "hire_date", "salary", "age", "years_experience", "status"],
-      learningObjectives: [
-        "Validate salary ranges and consistency",
-        "Check hire date vs experience relationships",
-        "Identify unrealistic age/experience combinations",
-        "Handle missing department assignments",
-      ],
-      commonIssues: [
-        "Negative or zero salaries",
-        "Future hire dates",
-        "Experience less than time at company",
-        "Unrealistic age values",
-        "Missing department information",
-      ],
-      generateData: generateEmployeeData,
-    },
-    {
-      id: "students",
-      name: "Student Academic Records",
-      description: "Educational data with grades, GPAs, and enrollment information",
-      icon: GraduationCap,
-      difficulty: "Advanced",
-      rowCount: 600,
-      headers: ["student_id", "first_name", "last_name", "email", "major", "gpa", "enrollment_date", "expected_graduation", "age", "credits_completed", "current_grade", "status"],
-      learningObjectives: [
-        "Validate GPA ranges (0.0-4.0)",
-        "Check enrollment vs graduation date logic",
-        "Handle inconsistent grade formats",
-        "Identify unrealistic academic data",
-      ],
-      commonIssues: [
-        "GPAs outside valid range (0.0-4.0)",
-        "Graduation dates before enrollment",
-        "Inconsistent grade formats (A, 85, PASS)",
-        "Unrealistic ages for students",
-        "Missing major information",
-      ],
-      generateData: generateStudentData,
-    },
-  ]
-
-  // ============================================================================
-  // DATA ANALYSIS SIMULATION
-  // ============================================================================
-  
-  /**
-   * Simulate data analysis for generated sample data
-   * This creates realistic analysis results that match the intentional issues
-   */
-  const simulateAnalysis = (data: any[], headers: string[], datasetId: string): DataAnalysisResult => {
-    // Calculate basic statistics
-    const totalRows = data.length
-    const totalColumns = headers.length
-    
-    // Count null values per column
-    const nullValues: Record<string, number> = {}
-    headers.forEach(header => {
-      nullValues[header] = data.filter(row => 
-        row[header] === null || row[header] === undefined || row[header] === ""
-      ).length
-    })
-
-    // Detect duplicates (minimal for sample data)
-    const duplicates = Math.floor(totalRows * 0.02) // Simulate 2% duplicates
-
-    // Simulate data types
-    const dataTypes: Record<string, string> = {}
-    headers.forEach(header => {
-      if (header.includes('id')) dataTypes[header] = 'string'
-      else if (header.includes('date')) dataTypes[header] = 'date'
-      else if (header.includes('email')) dataTypes[header] = 'email'
-      else if (header.includes('phone')) dataTypes[header] = 'phone'
-      else if (['age', 'salary', 'gpa', 'quantity', 'amount', 'price', 'credits'].some(term => header.includes(term))) {
-        dataTypes[header] = 'number'
-      }
-      else dataTypes[header] = 'string'
-    })
-
-    // Simulate contextual issues based on dataset type
-    const contextualIssues = []
-    let issueCount = 0
-
-    // Add issues based on the dataset's designed problems
-    const dataset = sampleDatasets.find(d => d.id === datasetId)
-    if (dataset) {
-      issueCount = Math.floor(totalRows * 0.15) // 15% of rows have issues
-      
-      for (let i = 0; i < issueCount; i++) {
-        const randomRow = Math.floor(Math.random() * totalRows)
-        const issueTypes = dataset.commonIssues
-        const randomIssue = issueTypes[Math.floor(Math.random() * issueTypes.length)]
-        
-        contextualIssues.push({
-          column: headers[Math.floor(Math.random() * headers.length)],
-          row: randomRow,
-          value: data[randomRow]?.[headers[0]] || "sample_value",
-          issue: randomIssue,
-          severity: Math.random() > 0.7 ? "high" : (Math.random() > 0.4 ? "medium" : "low"),
-          suggestion: "Review and correct this value based on business rules"
-        })
-      }
+    /* e-mail issues purposely injected */
+    let email = ""
+    if (firstName && lastName && domain) {
+      if (domain === "invalid") email = `${firstName}.${lastName}@`
+      else if (domain === "@broken") email = `${firstName}.${lastName}broken.com`
+      else email = `${firstName}.${lastName}@${domain}`
     }
 
-    // Calculate quality score based on issues
-    let qualityScore = 100
-    qualityScore -= (Object.values(nullValues).reduce((sum, count) => sum + count, 0) / (totalRows * totalColumns)) * 30
-    qualityScore -= (duplicates / totalRows) * 20
-    qualityScore -= (issueCount / totalRows) * 25
-    qualityScore = Math.max(0, Math.round(qualityScore))
+    /* phone numbers with mixed formats */
+    const phoneFormats: Array<() => string> = [
+      () => `(${randBetween(100, 999)}) ${randBetween(100, 999)}-${randBetween(1000, 9999)}`,
+      () => `${randBetween(100, 999)}-${randBetween(100, 999)}-${randBetween(1000, 9999)}`,
+      () => `${randBetween(1000000000, 9999999999)}`,
+      () => "123", // too short
+      () => "", // missing
+    ]
+    const phone = rand(phoneFormats)()
+
+    /* age edge-cases */
+    let age = randBetween(18, 98)
+    if (Math.random() < 0.05) age = -5
+    if (Math.random() < 0.03) age = 150
 
     return {
-      totalRows,
-      totalColumns,
-      nullValues,
-      duplicates,
-      dataTypes,
-      outliers: {}, // Simplified for sample data
-      statistics: {}, // Simplified for sample data
-      contextualIssues,
-      crossFieldIssues: [], // Simplified for sample data
-      qualityScore
+      customer_id: `CUST${String(i + 1).padStart(4, "0")}`,
+      first_name: firstName,
+      last_name: lastName,
+      email,
+      phone,
+      age,
+      city: rand(cities),
+      state: rand(states),
+      registration_date: new Date(2020 + Math.floor(Math.random() * 4), randBetween(0, 11), randBetween(1, 28))
+        .toISOString()
+        .split("T")[0],
+      status: Math.random() > 0.1 ? (Math.random() > 0.5 ? "Active" : "Inactive") : "",
+    }
+  })
+}
+
+const generateSalesData = (): any[] => {
+  const products = ["Laptop", "Mouse", "Keyboard", "Monitor", "Headphones", "", "Tablet", "Phone", "Charger"]
+  const salespeople = ["Alice Johnson", "Bob Smith", "Carol Davis", "", "David Wilson", "Eve Brown"]
+  const regions = ["North", "South", "East", "West", "", "Central"]
+
+  return Array.from({ length: 800 }, (_, i) => {
+    let amount = randBetween(50, 2050)
+    if (Math.random() < 0.08) amount = -amount
+    if (Math.random() < 0.03) amount = 0
+
+    let saleDate = new Date(2023, randBetween(0, 11), randBetween(1, 28))
+    if (Math.random() < 0.05) saleDate = new Date(2025, randBetween(0, 11), randBetween(1, 28))
+
+    let quantity = randBetween(1, 10)
+    if (Math.random() < 0.04) quantity = 0
+    if (Math.random() < 0.02) quantity = -2
+
+    return {
+      transaction_id: `TXN${String(i + 1).padStart(5, "0")}`,
+      product_name: rand(products),
+      quantity,
+      unit_price: randBetween(10, 500),
+      total_amount: amount,
+      sale_date: saleDate.toISOString().split("T")[0],
+      salesperson: rand(salespeople),
+      region: rand(regions),
+      customer_id: `CUST${String(randBetween(1, 500)).padStart(4, "0")}`,
+      payment_method: Math.random() > 0.1 ? (Math.random() > 0.5 ? "Credit Card" : "Cash") : "",
+    }
+  })
+}
+
+const generateEmployeeData = (): any[] => {
+  const departments = ["Engineering", "Marketing", "Sales", "HR", "Finance", "", "Operations", "Support"]
+  const positions = ["Manager", "Senior", "Junior", "Lead", "Director", "", "Analyst", "Specialist"]
+  const firstNames = ["Alex", "Jordan", "Taylor", "Casey", "Morgan", "Riley", "", "Avery", "Quinn"]
+  const lastNames = ["Anderson", "Thompson", "Martinez", "Robinson", "", "Clark", "Rodriguez", "Lewis"]
+
+  return Array.from({ length: 300 }, (_, i) => {
+    const firstName = rand(firstNames)
+    const lastName = rand(lastNames)
+
+    let hireDate = new Date(2015 + randBetween(0, 7), randBetween(0, 11), randBetween(1, 28))
+    if (Math.random() < 0.03) hireDate = new Date(2025, randBetween(0, 11), randBetween(1, 28))
+
+    let salary = randBetween(30000, 130000)
+    if (Math.random() < 0.05) salary = -salary
+    if (Math.random() < 0.02) salary = 0
+    if (Math.random() < 0.01) salary = 10_000_000
+
+    let age = randBetween(22, 62)
+    if (Math.random() < 0.03) age = 16
+    if (Math.random() < 0.02) age = 80
+
+    const currentYear = new Date().getFullYear()
+    const yearsAtCompany = currentYear - hireDate.getFullYear()
+    let totalExperience = yearsAtCompany + randBetween(0, 9)
+    if (Math.random() < 0.05) totalExperience = yearsAtCompany - 2
+
+    return {
+      employee_id: `EMP${String(i + 1).padStart(4, "0")}`,
+      first_name: firstName,
+      last_name: lastName,
+      email: firstName && lastName ? `${firstName}.${lastName}@company.com`.toLowerCase() : "",
+      department: rand(departments),
+      position: rand(positions),
+      hire_date: hireDate.toISOString().split("T")[0],
+      salary,
+      age,
+      years_experience: totalExperience,
+      status: Math.random() > 0.05 ? "Active" : Math.random() > 0.5 ? "Inactive" : "On Leave",
+    }
+  })
+}
+
+const generateStudentData = (): any[] => {
+  const majors = ["Computer Science", "Business", "Engineering", "Psychology", "Biology", "", "Mathematics", "Art"]
+  const grades = ["A", "B", "C", "D", "F", "", "A+", "B-", "PASS", "FAIL", "85", "92", "INVALID"]
+  const firstNames = ["Emma", "Liam", "Olivia", "Noah", "Ava", "William", "", "Sophia", "James", "Isabella"]
+  const lastNames = ["Johnson", "Williams", "Brown", "Jones", "Garcia", "", "Miller", "Davis", "Rodriguez"]
+
+  return Array.from({ length: 600 }, (_, i) => {
+    const firstName = rand(firstNames)
+    const lastName = rand(lastNames)
+
+    let gpa = Math.round(Math.random() * 400) / 100
+    if (Math.random() < 0.05) gpa = 5.2
+    if (Math.random() < 0.03) gpa = -1.5
+    if (Math.random() < 0.02) gpa = null as any
+
+    let enrollmentDate = new Date(2020 + randBetween(0, 3), randBetween(0, 11), randBetween(1, 28))
+    if (Math.random() < 0.04) enrollmentDate = new Date(2025, randBetween(0, 11), randBetween(1, 28))
+
+    let graduationDate = new Date(enrollmentDate.getFullYear() + 4, 5, 15)
+    if (Math.random() < 0.06) graduationDate = new Date(enrollmentDate.getFullYear() - 1, 5, 15)
+
+    let age = randBetween(18, 27)
+    if (Math.random() < 0.03) age = 12
+    if (Math.random() < 0.02) age = 65
+
+    return {
+      student_id: `STU${String(i + 1).padStart(5, "0")}`,
+      first_name: firstName,
+      last_name: lastName,
+      email: firstName && lastName ? `${firstName}.${lastName}@university.edu`.toLowerCase() : "",
+      major: rand(majors),
+      gpa,
+      enrollment_date: enrollmentDate.toISOString().split("T")[0],
+      expected_graduation: graduationDate.toISOString().split("T")[0],
+      age,
+      credits_completed: randBetween(0, 120),
+      current_grade: rand(grades),
+      status: Math.random() > 0.08 ? (Math.random() > 0.7 ? "Enrolled" : "Graduated") : "",
+    }
+  })
+}
+
+/* ---------------------------------------------------------------------------
+   SAMPLE DATASET DEFINITION ARRAY
+-----------------------------------------------------------------------------*/
+
+const sampleDatasets: SampleDataset[] = [
+  {
+    id: "customers",
+    name: "Customer Database",
+    description: "Contact details & demographics (great place to start)",
+    icon: Users,
+    difficulty: "Beginner",
+    rowCount: 500,
+    headers: [
+      "customer_id",
+      "first_name",
+      "last_name",
+      "email",
+      "phone",
+      "age",
+      "city",
+      "state",
+      "registration_date",
+      "status",
+    ],
+    learningObjectives: [
+      "Spot invalid email formats",
+      "Fill missing contact info",
+      "Check age ranges",
+      "Standardise phone numbers",
+    ],
+    commonIssues: [
+      "Invalid email addresses",
+      "Missing names",
+      "Weird phone formatting",
+      "Unrealistic ages",
+      "Empty city/state",
+    ],
+    generateData: generateCustomerData,
+  },
+  {
+    id: "sales",
+    name: "Sales Transactions",
+    description: "Amounts, dates, regions & products",
+    icon: ShoppingCart,
+    difficulty: "Intermediate",
+    rowCount: 800,
+    headers: [
+      "transaction_id",
+      "product_name",
+      "quantity",
+      "unit_price",
+      "total_amount",
+      "sale_date",
+      "salesperson",
+      "region",
+      "customer_id",
+      "payment_method",
+    ],
+    learningObjectives: [
+      "Catch negative amounts",
+      "Find future-dated sales",
+      "Tie quantity to pricing",
+      "Handle blanks",
+    ],
+    commonIssues: ["Negative totals", "Future dates", "Zero quantities", "Missing product names"],
+    generateData: generateSalesData,
+  },
+  {
+    id: "employees",
+    name: "Employee Records",
+    description: "HR salary & hiring data",
+    icon: Briefcase,
+    difficulty: "Advanced",
+    rowCount: 300,
+    headers: [
+      "employee_id",
+      "first_name",
+      "last_name",
+      "email",
+      "department",
+      "position",
+      "hire_date",
+      "salary",
+      "age",
+      "years_experience",
+      "status",
+    ],
+    learningObjectives: [
+      "Validate reasonable salaries",
+      "Compare hire date vs experience",
+      "Spot age anomalies",
+      "Fill missing departments",
+    ],
+    commonIssues: ["Negative or zero salaries", "Future hire dates", "Experience mismatch", "Missing departments"],
+    generateData: generateEmployeeData,
+  },
+  {
+    id: "students",
+    name: "Student Academic Records",
+    description: "Grades, GPA & enrolment logic",
+    icon: GraduationCap,
+    difficulty: "Advanced",
+    rowCount: 600,
+    headers: [
+      "student_id",
+      "first_name",
+      "last_name",
+      "email",
+      "major",
+      "gpa",
+      "enrollment_date",
+      "expected_graduation",
+      "age",
+      "credits_completed",
+      "current_grade",
+      "status",
+    ],
+    learningObjectives: [
+      "Keep GPA between 0 & 4",
+      "Check enrol vs graduation order",
+      "Normalise grade formats",
+      "Flag unusual ages",
+    ],
+    commonIssues: ["GPA > 4 or < 0", "Grad date before enrol", "Mixed grade formats", "Missing majors"],
+    generateData: generateStudentData,
+  },
+]
+
+/* ---------------------------------------------------------------------------
+   ANALYSIS SIMULATION (works offline, no AI required)
+-----------------------------------------------------------------------------*/
+
+const simulateAnalysis = (data: any[], headers: string[], datasetId: string): DataAnalysisResult => {
+  const totalRows = data.length
+  const totalColumns = headers.length
+
+  /* null counts */
+  const nullValues: Record<string, number> = {}
+  headers.forEach(
+    (h) => (nullValues[h] = data.filter((r) => r[h] === "" || r[h] === null || r[h] === undefined).length),
+  )
+
+  /* fake dupes */
+  const duplicates = Math.floor(totalRows * 0.02)
+
+  /* simple data-type guesses */
+  const dataTypes: Record<string, string> = {}
+  headers.forEach((h) => {
+    if (h.includes("id")) dataTypes[h] = "string"
+    else if (h.includes("date")) dataTypes[h] = "date"
+    else if (h.includes("email")) dataTypes[h] = "email"
+    else if (h.includes("phone")) dataTypes[h] = "phone"
+    else if (["age", "salary", "gpa", "quantity", "amount", "price", "credits"].some((t) => h.includes(t)))
+      dataTypes[h] = "number"
+    else dataTypes[h] = "string"
+  })
+
+  /* contextual issues – seeded from dataset definition */
+  const dataset = sampleDatasets.find((d) => d.id === datasetId)!
+  const contextualIssues: Array<{
+    column: string
+    row: number
+    value: any
+    issue: string
+    severity: "low" | "medium" | "high"
+    suggestion: string
+  }> = []
+
+  const issueCount = Math.floor(totalRows * 0.15)
+  for (let i = 0; i < issueCount; i++) {
+    const row = randBetween(0, totalRows - 1)
+    const column = rand(headers)
+    contextualIssues.push({
+      column,
+      row,
+      value: data[row]?.[column],
+      issue: rand(dataset.commonIssues),
+      severity: Math.random() > 0.7 ? "high" : Math.random() > 0.4 ? "medium" : "low",
+      suggestion: "Please review & correct this value.",
+    })
+  }
+
+  /* crude quality score */
+  let qualityScore = 100
+  const nullPenalty = (Object.values(nullValues).reduce((s, c) => s + c, 0) / (totalRows * totalColumns)) * 30
+  const dupPenalty = (duplicates / totalRows) * 20
+  const issuePenalty = (issueCount / totalRows) * 25
+  qualityScore = Math.max(0, Math.round(qualityScore - nullPenalty - dupPenalty - issuePenalty))
+
+  return {
+    totalRows,
+    totalColumns,
+    nullValues,
+    duplicates,
+    dataTypes,
+    outliers: {},
+    statistics: {},
+    contextualIssues,
+    crossFieldIssues: [],
+    qualityScore,
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   MAIN COMPONENT
+-----------------------------------------------------------------------------*/
+
+export function SampleDataGenerator({ onSampleDataGenerated }: SampleDataGeneratorProps) {
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
+
+  const { toast } = useToast()
+
+  const selectedDataset = sampleDatasets.find((d) => d.id === selectedId)
+
+  /* kick off generation */
+  const handleGenerate = async () => {
+    if (!selectedDataset) {
+      toast({ title: "Choose a dataset first", variant: "destructive" })
+      return
+    }
+
+    setIsGenerating(true)
+    try {
+      /* generate rows */
+      const data = selectedDataset.generateData()
+
+      /* create CSV text (simple, no quotes) */
+      const csvLines = [
+        selectedDataset.headers.join(","),
+        ...data.map((row) =>
+          selectedDataset.headers
+            .map((h) => {
+              const val = row[h] ?? ""
+              return typeof val === "string" ? `"${val.replace(/"/g, '""')}"` : val
+            })
+            .join(","),
+        ),
+      ]
+      const csvBlob = new Blob([csvLines.join("\n")], { type: "text/csv" })
+
+      /* fake analysis */
+      const analysis = simulateAnalysis(data, selectedDataset.headers, selectedDataset.id)
+
+      /* build FileData object expected by parent page */
+      const file: FileData = {
+        id: `${selectedDataset.id}-${Date.now()}`,
+        name: `${selectedDataset.name}.csv`,
+        blob: csvBlob as any, // parent likely casts/uses
+        rawRows: data,
+        headers: selectedDataset.headers,
+        analysis,
+      }
+
+      onSampleDataGenerated(file)
+      toast({ title: "Sample data ready!", description: "Check the analysis panel." })
+    } catch (err) {
+      console.error(err)
+      toast({
+        title: "Generation failed",
+        description: "Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsGenerating(false)
     }
   }
 
-/**
-   *
+  /* -----------------------------------------------------------------------
+     RENDER
+  -----------------------------------------------------------------------*/
+  return (
+    <section className="space-y-6">
+      <h2 className="text-xl font-semibold">Practice with Sample Data</h2>
+      <p className="text-muted-foreground">
+        Pick a dataset and generate it instantly. Each set hides common data quality problems so you can test the
+        validator. All descriptions are plain-English&mdash;no technical jargon!
+      </p>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {sampleDatasets.map((ds) => {
+          const Icon = ds.icon
+          const isActive = ds.id === selectedId
+          return (
+            <Card
+              key={ds.id}
+              onClick={() => setSelectedId(ds.id)}
+              className={`cursor-pointer transition border-2 ${
+                isActive ? "border-foreground ring-2 ring-foreground/30" : "border-transparent hover:border-muted"
+              }`}
+            >
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <Icon className="h-6 w-6 text-primary" />
+                  <CardTitle className="text-base">{ds.name}</CardTitle>
+                </div>
+                <CardDescription className="mt-1 text-sm leading-relaxed">{ds.description}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-1 text-sm">
+                <p>
+                  <strong>Rows:</strong> {ds.rowCount}
+                </p>
+                <p>
+                  <strong>Level:</strong> {ds.difficulty}
+                </p>
+              </CardContent>
+              <CardFooter>
+                {isActive ? (
+                  <span className="text-sm font-medium text-primary">Selected</span>
+                ) : (
+                  <span className="text-sm text-muted-foreground">Click to choose</span>
+                )}
+              </CardFooter>
+            </Card>
+          )
+        })}
+      </div>
+
+      <Separator />
+
+      <div className="flex items-center gap-3">
+        <Button onClick={handleGenerate} disabled={isGenerating || !selectedId}>
+          {isGenerating ? (
+            <>
+              <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+              Generating…
+            </>
+          ) : (
+            <>
+              <Download className="mr-2 h-4 w-4" />
+              Generate Dataset
+            </>
+          )}
+        </Button>
+        {!selectedId && <p className="text-sm text-muted-foreground">Select a dataset card first.</p>}
+      </div>
+
+      {isGenerating && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 mt-6">
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <Skeleton key={idx} className="h-24 w-full" />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}

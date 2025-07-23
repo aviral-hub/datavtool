@@ -1,13 +1,25 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useEffect, useCallback, type ReactNode } from "react"
 import type { FileData } from "@/app/page"
 import { groq } from "@ai-sdk/groq"
 import { generateText } from "ai"
 import { toast } from "sonner"
 
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Progress } from "@/components/ui/progress"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Label } from "@/components/ui/label"
+
+import { Brain, Wand2, Download, Wifi, WifiOff, Lightbulb, BookOpen, CheckCircle, AlertTriangle } from "lucide-react"
+
 /**
- * Props for the AI Data Assistant component
+ * Props for the AiDataAssistant component
  */
 interface AiDataAssistantProps {
   file: FileData
@@ -464,6 +476,18 @@ const LOCAL_KNOWLEDGE_BASE = {
   },
 }
 
+/* -----------------------------------------------------------------------------
+ * Simple local knowledge base for offline / fallback explanations
+ * -------------------------------------------------------------------------- */
+const LOCAL_KB = {
+  missingData:
+    "Some cells are empty – like blanks in a form. Filling them helps you see the complete picture and make better decisions.",
+  duplicates:
+    "Duplicate rows inflate your numbers (imagine counting the same customer twice). Removing them gives you accurate stats.",
+  formatting:
+    "Inconsistent formatting (e.g. mixed capitalisation) makes data hard to analyse. Standardising keeps everything neat.",
+}
+
 /**
  * AI Data Assistant Component with Comprehensive Local Knowledge Base
  */
@@ -514,13 +538,18 @@ export function AiDataAssistant({ file, onFileUpdate }: AiDataAssistantProps) {
     if (totalNulls > 0) {
       const knowledge = LOCAL_KNOWLEDGE_BASE.dataQualityRules.missing_data
       const nullPercentage = Math.round((totalNulls / (dataSummary.totalRows * dataSummary.totalColumns)) * 100)
-      
+
       recommendations.push({
         id: "local_missing_data",
         title: "Fix Missing Information",
         description: "Your data has empty cells that need attention.",
         userFriendlyExplanation: `${knowledge.explanation} In your file, ${totalNulls} cells are empty (${nullPercentage}% of your data). This is like having ${nullPercentage}% of a puzzle missing - you can't see the complete picture.`,
-        impact: totalNulls > dataSummary.totalRows * 0.1 ? "high" : totalNulls > dataSummary.totalRows * 0.05 ? "medium" : "low",
+        impact:
+          totalNulls > dataSummary.totalRows * 0.1
+            ? "high"
+            : totalNulls > dataSummary.totalRows * 0.05
+              ? "medium"
+              : "low",
         confidence: 0.95,
         affectedRows: totalNulls,
         category: "missing_data",
@@ -531,7 +560,7 @@ export function AiDataAssistant({ file, onFileUpdate }: AiDataAssistantProps) {
           "3. For number columns (like age, price), consider using the average value",
           "4. For text columns (like names, categories), use 'Unknown' or 'Not Specified'",
           "5. For critical business data, try to collect the missing information from original sources",
-          "6. Document your decisions so your team knows what you did and why"
+          "6. Document your decisions so your team knows what you did and why",
         ],
         estimatedTimeToFix: totalNulls < 100 ? "15-30 minutes" : totalNulls < 1000 ? "1-2 hours" : "Half day",
         difficulty: "easy",
@@ -560,9 +589,9 @@ WHERE numeric_column IS NULL;
 -- Fill missing text values
 UPDATE your_table 
 SET text_column = 'Unknown' 
-WHERE text_column IS NULL OR text_column = '';`
+WHERE text_column IS NULL OR text_column = '';`,
         },
-        preview: `Will fill ${totalNulls} empty cells with appropriate default values, making your data complete and ready for analysis`
+        preview: `Will fill ${totalNulls} empty cells with appropriate default values, making your data complete and ready for analysis`,
       })
     }
 
@@ -570,7 +599,7 @@ WHERE text_column IS NULL OR text_column = '';`
     if (dataSummary.duplicates > 0) {
       const knowledge = LOCAL_KNOWLEDGE_BASE.dataQualityRules.duplicates
       const duplicatePercentage = Math.round((dataSummary.duplicates / dataSummary.totalRows) * 100)
-      
+
       recommendations.push({
         id: "local_duplicates",
         title: "Remove Duplicate Records",
@@ -587,9 +616,10 @@ WHERE text_column IS NULL OR text_column = '';`
           "3. Decide which version to keep: usually the most recent or most complete one",
           "4. Remove the duplicate copies, keeping only one version of each record",
           "5. Check your results to make sure you didn't accidentally remove important data",
-          "6. Set up processes to prevent duplicates in the future"
+          "6. Set up processes to prevent duplicates in the future",
         ],
-        estimatedTimeToFix: dataSummary.duplicates < 50 ? "10-20 minutes" : dataSummary.duplicates < 500 ? "30-60 minutes" : "2-3 hours",
+        estimatedTimeToFix:
+          dataSummary.duplicates < 50 ? "10-20 minutes" : dataSummary.duplicates < 500 ? "30-60 minutes" : "2-3 hours",
         difficulty: "medium",
         code: {
           python: `# Remove duplicate rows safely
@@ -623,30 +653,34 @@ WHERE row_num > 1;
 DELETE FROM your_table 
 WHERE id IN (
   SELECT id FROM numbered_rows WHERE row_num > 1
-);`
+);`,
         },
-        preview: `Will remove ${dataSummary.duplicates} duplicate records, giving you accurate counts and cleaner data`
+        preview: `Will remove ${dataSummary.duplicates} duplicate records, giving you accurate counts and cleaner data`,
       })
     }
 
     // Check for formatting issues
     const hasFormattingIssues = dataSummary.contextualIssues?.some(
-      (issue: any) => issue.issue.toLowerCase().includes("format") || 
-                     issue.issue.toLowerCase().includes("inconsistent") ||
-                     issue.issue.toLowerCase().includes("case")
+      (issue: any) =>
+        issue.issue.toLowerCase().includes("format") ||
+        issue.issue.toLowerCase().includes("inconsistent") ||
+        issue.issue.toLowerCase().includes("case"),
     )
 
-    if (hasFormattingIssues || dataSummary.headers.some((h: string) => 
-      dataSummary.sampleData.some((row: any) => 
-        typeof row[h] === 'string' && (
-          row[h]?.includes('  ') || // multiple spaces
-          row[h] !== row[h]?.trim() || // leading/trailing spaces
-          /[A-Z]/.test(row[h]) && /[a-z]/.test(row[h]) // mixed case
-        )
+    if (
+      hasFormattingIssues ||
+      dataSummary.headers.some((h: string) =>
+        dataSummary.sampleData.some(
+          (row: any) =>
+            typeof row[h] === "string" &&
+            (row[h]?.includes("  ") || // multiple spaces
+              row[h] !== row[h]?.trim() || // leading/trailing spaces
+              (/[A-Z]/.test(row[h]) && /[a-z]/.test(row[h]))), // mixed case
+        ),
       )
-    )) {
+    ) {
       const knowledge = LOCAL_KNOWLEDGE_BASE.dataQualityRules.formatting
-      
+
       recommendations.push({
         id: "local_formatting",
         title: "Standardize Data Formatting",
@@ -663,7 +697,7 @@ WHERE id IN (
           "3. Clean up extra spaces at the beginning and end of text",
           "4. Make text case consistent throughout each column",
           "5. Standardize abbreviations (decide on 'St' or 'Street', stick with one)",
-          "6. Create formatting guidelines for future data entry"
+          "6. Create formatting guidelines for future data entry",
         ],
         estimatedTimeToFix: "20-45 minutes",
         difficulty: "easy",
@@ -697,22 +731,24 @@ SET
 -- Remove multiple spaces
 UPDATE your_table 
 SET text_column = REGEXP_REPLACE(text_column, '\\s+', ' ', 'g')
-WHERE text_column IS NOT NULL;`
+WHERE text_column IS NOT NULL;`,
         },
-        preview: "Will standardize formatting across all text fields, making your data consistent and professional-looking"
+        preview:
+          "Will standardize formatting across all text fields, making your data consistent and professional-looking",
       })
     }
 
     // Check for validation issues
     const hasValidationIssues = dataSummary.contextualIssues?.some(
-      (issue: any) => issue.issue.toLowerCase().includes("invalid") || 
-                     issue.issue.toLowerCase().includes("error") ||
-                     issue.issue.toLowerCase().includes("wrong")
+      (issue: any) =>
+        issue.issue.toLowerCase().includes("invalid") ||
+        issue.issue.toLowerCase().includes("error") ||
+        issue.issue.toLowerCase().includes("wrong"),
     )
 
     if (hasValidationIssues) {
       const knowledge = LOCAL_KNOWLEDGE_BASE.dataQualityRules.validation
-      
+
       recommendations.push({
         id: "local_validation",
         title: "Fix Invalid Data",
@@ -729,7 +765,7 @@ WHERE text_column IS NOT NULL;`
           "3. Verify email addresses have @ symbols and proper domain names",
           "4. Ensure phone numbers have the right number of digits",
           "5. Check that numbers are within reasonable ranges for their purpose",
-          "6. Cross-check related fields to make sure they're consistent with each other"
+          "6. Cross-check related fields to make sure they're consistent with each other",
         ],
         estimatedTimeToFix: "30-90 minutes",
         difficulty: "medium",
@@ -774,9 +810,9 @@ WHERE price < 0;
 -- Fix phone numbers (keep only digits)
 UPDATE your_table 
 SET phone = REGEXP_REPLACE(phone, '[^0-9]', '', 'g')
-WHERE LENGTH(REGEXP_REPLACE(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 15;`
+WHERE LENGTH(REGEXP_REPLACE(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 15;`,
         },
-        preview: "Will fix invalid data entries, making your data logically consistent and reliable for analysis"
+        preview: "Will fix invalid data entries, making your data logically consistent and reliable for analysis",
       })
     }
 
@@ -818,27 +854,32 @@ WHERE LENGTH(REGEXP_REPLACE(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 15;`
       title: `Data Quality Health Check: ${qualityLevel} (${qualityScore}%)`,
       description: `Your overall data quality score is ${qualityScore}%, indicating ${qualityLevel.toLowerCase()} data quality.`,
       userFriendlyExplanation: `Think of data quality like your credit score - it tells you how trustworthy your data is for making important decisions. A score of ${qualityScore}% means your data is ${qualityLevel.toLowerCase()}. ${qualityScore >= 70 ? "This gives you good confidence in making business decisions based on your data." : "This means you should be cautious about making important decisions based on this data until you improve its quality."}`,
-      impact: qualityScore >= 70 
-        ? "Your analysis and reports should be reliable, giving you confidence in business decisions"
-        : "Poor data quality increases the risk of wrong business decisions, wasted resources, and missed opportunities",
-      recommendation: qualityScore >= 70
-        ? "Maintain current data quality standards and continue monitoring"
-        : "Immediate action needed to improve data quality before making important business decisions",
+      impact:
+        qualityScore >= 70
+          ? "Your analysis and reports should be reliable, giving you confidence in business decisions"
+          : "Poor data quality increases the risk of wrong business decisions, wasted resources, and missed opportunities",
+      recommendation:
+        qualityScore >= 70
+          ? "Maintain current data quality standards and continue monitoring"
+          : "Immediate action needed to improve data quality before making important business decisions",
       priority,
       timeline,
       costBenefit,
-      actionItems: qualityScore >= 70 ? [
-        "Continue regular data quality monitoring",
-        "Document current best practices for your team",
-        "Train new team members on your data standards",
-        "Set up automated alerts for quality drops"
-      ] : [
-        "Address missing data and duplicates immediately",
-        "Implement data validation rules in your systems",
-        "Create clear data entry guidelines for your team",
-        "Schedule weekly data quality reviews until improvement",
-        "Consider data cleaning tools or professional help"
-      ]
+      actionItems:
+        qualityScore >= 70
+          ? [
+              "Continue regular data quality monitoring",
+              "Document current best practices for your team",
+              "Train new team members on your data standards",
+              "Set up automated alerts for quality drops",
+            ]
+          : [
+              "Address missing data and duplicates immediately",
+              "Implement data validation rules in your systems",
+              "Create clear data entry guidelines for your team",
+              "Schedule weekly data quality reviews until improvement",
+              "Consider data cleaning tools or professional help",
+            ],
     })
 
     // Missing data insight
@@ -851,44 +892,47 @@ WHERE LENGTH(REGEXP_REPLACE(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 15;`
         title: `Missing Data Impact: ${nullPercentage}% of Your Data is Incomplete`,
         description: `${nullPercentage}% of your data is missing, which significantly impacts business decision reliability.`,
         userFriendlyExplanation: `Imagine trying to complete a jigsaw puzzle with ${nullPercentage}% of the pieces missing - you can't see the full picture. That's what missing data does to your business analysis. With ${nullPercentage}% missing data, you're making decisions with incomplete information, which increases the risk of poor outcomes.`,
-        impact: nullPercentage > 20 
-          ? "Critical impact: Analysis is unreliable, decisions may be seriously flawed"
-          : nullPercentage > 10
-            ? "High impact: Significant gaps in analysis, increased risk of wrong decisions"
-            : "Moderate impact: Some analysis limitations, but manageable with proper handling",
-        recommendation: nullPercentage > 20
-          ? "Stop using this data for important decisions until missing data is addressed"
-          : "Prioritize filling critical missing data and implement prevention processes",
+        impact:
+          nullPercentage > 20
+            ? "Critical impact: Analysis is unreliable, decisions may be seriously flawed"
+            : nullPercentage > 10
+              ? "High impact: Significant gaps in analysis, increased risk of wrong decisions"
+              : "Moderate impact: Some analysis limitations, but manageable with proper handling",
+        recommendation:
+          nullPercentage > 20
+            ? "Stop using this data for important decisions until missing data is addressed"
+            : "Prioritize filling critical missing data and implement prevention processes",
         priority: nullPercentage > 20 ? "critical" : nullPercentage > 10 ? "high" : "medium",
         timeline: nullPercentage > 20 ? "Within 1 week" : nullPercentage > 10 ? "Within 2-3 weeks" : "Within 1 month",
         costBenefit: "Cost of data collection vs. cost of wrong decisions due to incomplete information",
         metrics: {
           before: nullPercentage,
           after: Math.max(2, nullPercentage - 15),
-          improvement: Math.min(15, nullPercentage - 2)
+          improvement: Math.min(15, nullPercentage - 2),
         },
         actionItems: [
           "Identify which missing data is most critical for your key business decisions",
           "Reach out to original data sources to fill the most important gaps",
           "Implement required fields in data collection forms going forward",
           "Create backup data collection methods for critical information",
-          "Set up alerts when data completeness drops below acceptable levels"
-        ]
+          "Set up alerts when data completeness drops below acceptable levels",
+        ],
       })
     }
 
     // Duplicate data insight
     if (dataSummary.duplicates > 0) {
       const duplicatePercentage = Math.round((dataSummary.duplicates / dataSummary.totalRows) * 100)
-      
+
       insights.push({
         id: "local_duplicate_insight",
         title: `Duplicate Records: ${duplicatePercentage}% Inflation in Your Numbers`,
         description: `${dataSummary.duplicates} duplicate records are inflating your counts and potentially skewing analysis.`,
         userFriendlyExplanation: `Having ${duplicatePercentage}% duplicate records is like counting the same customers ${duplicatePercentage}% more than once - it makes your business look bigger than it actually is. This can lead to overestimating demand, ordering too much inventory, or making other decisions based on inflated numbers.`,
-        impact: duplicatePercentage > 10
-          ? "High impact: Significantly inflated numbers affecting business planning and resource allocation"
-          : "Moderate impact: Some inflation in numbers, but manageable with awareness",
+        impact:
+          duplicatePercentage > 10
+            ? "High impact: Significantly inflated numbers affecting business planning and resource allocation"
+            : "Moderate impact: Some inflation in numbers, but manageable with awareness",
         recommendation: "Remove duplicates to get accurate counts and reliable analysis",
         priority: duplicatePercentage > 10 ? "high" : "medium",
         timeline: "Within 1-2 weeks",
@@ -896,15 +940,15 @@ WHERE LENGTH(REGEXP_REPLACE(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 15;`
         metrics: {
           before: dataSummary.totalRows,
           after: dataSummary.totalRows - dataSummary.duplicates,
-          improvement: duplicatePercentage
+          improvement: duplicatePercentage,
         },
         actionItems: [
           "Remove duplicate records to get accurate counts",
           "Review processes that might be creating duplicates",
           "Implement duplicate prevention in data entry systems",
           "Set up regular duplicate detection and removal",
-          "Train team on recognizing and preventing duplicate entry"
-        ]
+          "Train team on recognizing and preventing duplicate entry",
+        ],
       })
     }
 
@@ -914,46 +958,55 @@ WHERE LENGTH(REGEXP_REPLACE(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 15;`
   /**
    * Get contextual response from local knowledge base
    */
-  const getLocalResponse = useCallback((prompt: string): string => {
-    const lowerPrompt = prompt.toLowerCase()
-    
-    // Check for FAQ matches
-    for (const [key, response] of Object.entries(LOCAL_KNOWLEDGE_BASE.faqResponses)) {
-      if (lowerPrompt.includes(key.replace(/_/g, ' ')) || 
-          (key === 'what_is_data_quality' && (lowerPrompt.includes('data quality') || lowerPrompt.includes('quality'))) ||
-          (key === 'why_does_data_quality_matter' && (lowerPrompt.includes('why') && lowerPrompt.includes('matter'))) ||
-          (key === 'how_long_does_cleaning_take' && (lowerPrompt.includes('how long') || lowerPrompt.includes('time'))) ||
-          (key === 'what_should_i_fix_first' && (lowerPrompt.includes('first') || lowerPrompt.includes('priority'))) ||
-          (key === 'how_do_i_prevent_future_problems' && (lowerPrompt.includes('prevent') || lowerPrompt.includes('future'))) ||
-          (key === 'what_if_i_delete_important_data' && (lowerPrompt.includes('delete') || lowerPrompt.includes('remove')))) {
-        return response
+  const getLocalResponse = useCallback(
+    (prompt: string): string => {
+      const lowerPrompt = prompt.toLowerCase()
+
+      // Check for FAQ matches
+      for (const [key, response] of Object.entries(LOCAL_KNOWLEDGE_BASE.faqResponses)) {
+        if (
+          lowerPrompt.includes(key.replace(/_/g, " ")) ||
+          (key === "what_is_data_quality" &&
+            (lowerPrompt.includes("data quality") || lowerPrompt.includes("quality"))) ||
+          (key === "why_does_data_quality_matter" && lowerPrompt.includes("why") && lowerPrompt.includes("matter")) ||
+          (key === "how_long_does_cleaning_take" &&
+            (lowerPrompt.includes("how long") || lowerPrompt.includes("time"))) ||
+          (key === "what_should_i_fix_first" && (lowerPrompt.includes("first") || lowerPrompt.includes("priority"))) ||
+          (key === "how_do_i_prevent_future_problems" &&
+            (lowerPrompt.includes("prevent") || lowerPrompt.includes("future"))) ||
+          (key === "what_if_i_delete_important_data" &&
+            (lowerPrompt.includes("delete") || lowerPrompt.includes("remove")))
+        ) {
+          return response
+        }
       }
-    }
-    
-    // Check for specific data quality issues
-    if (lowerPrompt.includes('missing') || lowerPrompt.includes('null') || lowerPrompt.includes('empty')) {
-      const knowledge = LOCAL_KNOWLEDGE_BASE.dataQualityRules.missing_data
-      return `${knowledge.explanation}\n\nFor your dataset with ${file.data.length} rows:\n\n**Common causes:** ${knowledge.commonCauses.slice(0, 3).join(', ')}\n\n**Solutions:** ${knowledge.solutions.slice(0, 3).join(', ')}\n\n**Prevention:** ${knowledge.preventionTips.slice(0, 2).join(', ')}`
-    }
-    
-    if (lowerPrompt.includes('duplicate') || lowerPrompt.includes('repeated')) {
-      const knowledge = LOCAL_KNOWLEDGE_BASE.dataQualityRules.duplicates
-      return `${knowledge.explanation}\n\n**Business Impact:** ${knowledge.businessImpact}\n\n**Solutions:** ${knowledge.solutions.slice(0, 3).join(', ')}\n\n**Prevention:** ${knowledge.preventionTips.slice(0, 2).join(', ')}`
-    }
-    
-    if (lowerPrompt.includes('format') || lowerPrompt.includes('consistent') || lowerPrompt.includes('standard')) {
-      const knowledge = LOCAL_KNOWLEDGE_BASE.dataQualityRules.formatting
-      return `${knowledge.explanation}\n\n**Business Impact:** ${knowledge.businessImpact}\n\n**Solutions:** ${knowledge.solutions.slice(0, 3).join(', ')}\n\n**Examples:** ${knowledge.businessExamples.slice(0, 2).join(', ')}`
-    }
-    
-    if (lowerPrompt.includes('invalid') || lowerPrompt.includes('error') || lowerPrompt.includes('wrong')) {
-      const knowledge = LOCAL_KNOWLEDGE_BASE.dataQualityRules.validation
-      return `${knowledge.explanation}\n\n**Business Impact:** ${knowledge.businessImpact}\n\n**Solutions:** ${knowledge.solutions.slice(0, 3).join(', ')}\n\n**Examples:** ${knowledge.businessExamples.slice(0, 2).join(', ')}`
-    }
-    
-    // General response
-    return `Based on your question about "${prompt}" and your dataset with ${file.data.length} rows and ${file.headers.length} columns:\n\nI recommend starting with a comprehensive data quality analysis to identify the most impactful issues. The most common problems are:\n\n1. **Missing Data** - Empty cells that prevent complete analysis\n2. **Duplicates** - Repeated records that inflate numbers\n3. **Formatting Issues** - Inconsistent data that's hard to work with\n4. **Invalid Data** - Information that doesn't make sense\n\nWould you like me to run a full analysis to provide specific recommendations for your data?`
-  }, [file])
+
+      // Check for specific data quality issues
+      if (lowerPrompt.includes("missing") || lowerPrompt.includes("null") || lowerPrompt.includes("empty")) {
+        const knowledge = LOCAL_KNOWLEDGE_BASE.dataQualityRules.missing_data
+        return `${knowledge.explanation}\n\nFor your dataset with ${file.data.length} rows:\n\n**Common causes:** ${knowledge.commonCauses.slice(0, 3).join(", ")}\n\n**Solutions:** ${knowledge.solutions.slice(0, 3).join(", ")}\n\n**Prevention:** ${knowledge.preventionTips.slice(0, 2).join(", ")}`
+      }
+
+      if (lowerPrompt.includes("duplicate") || lowerPrompt.includes("repeated")) {
+        const knowledge = LOCAL_KNOWLEDGE_BASE.dataQualityRules.duplicates
+        return `${knowledge.explanation}\n\n**Business Impact:** ${knowledge.businessImpact}\n\n**Solutions:** ${knowledge.solutions.slice(0, 3).join(", ")}\n\n**Prevention:** ${knowledge.preventionTips.slice(0, 2).join(", ")}`
+      }
+
+      if (lowerPrompt.includes("format") || lowerPrompt.includes("consistent") || lowerPrompt.includes("standard")) {
+        const knowledge = LOCAL_KNOWLEDGE_BASE.dataQualityRules.formatting
+        return `${knowledge.explanation}\n\n**Business Impact:** ${knowledge.businessImpact}\n\n**Solutions:** ${knowledge.solutions.slice(0, 3).join(", ")}\n\n**Examples:** ${knowledge.businessExamples.slice(0, 2).join(", ")}`
+      }
+
+      if (lowerPrompt.includes("invalid") || lowerPrompt.includes("error") || lowerPrompt.includes("wrong")) {
+        const knowledge = LOCAL_KNOWLEDGE_BASE.dataQualityRules.validation
+        return `${knowledge.explanation}\n\n**Business Impact:** ${knowledge.businessImpact}\n\n**Solutions:** ${knowledge.solutions.slice(0, 3).join(", ")}\n\n**Examples:** ${knowledge.businessExamples.slice(0, 2).join(", ")}`
+      }
+
+      // General response
+      return `Based on your question about "${prompt}" and your dataset with ${file.data.length} rows and ${file.headers.length} columns:\n\nI recommend starting with a comprehensive data quality analysis to identify the most impactful issues. The most common problems are:\n\n1. **Missing Data** - Empty cells that prevent complete analysis\n2. **Duplicates** - Repeated records that inflate numbers\n3. **Formatting Issues** - Inconsistent data that's hard to work with\n4. **Invalid Data** - Information that doesn't make sense\n\nWould you like me to run a full analysis to provide specific recommendations for your data?`
+    },
+    [file],
+  )
 
   // ============================================================================
   // AI ANALYSIS FUNCTIONS
@@ -983,7 +1036,7 @@ WHERE LENGTH(REGEXP_REPLACE(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 15;`
         qualityScore: file.analysis?.qualityScore || 0,
         sampleData: file.data.slice(0, 5),
         contextualIssues: file.analysis?.contextualIssues?.slice(0, 10) || [],
-        crossFieldIssues: file.analysis?.crossFieldIssues?.slice(0, 5) || []
+        crossFieldIssues: file.analysis?.crossFieldIssues?.slice(0, 5) || [],
       }
 
       // Check if we should use local knowledge or AI
@@ -1021,7 +1074,7 @@ WHERE LENGTH(REGEXP_REPLACE(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 15;`
         nullValues: file.analysis?.nullValues || {},
         duplicates: file.analysis?.duplicates || 0,
         qualityScore: file.analysis?.qualityScore || 0,
-        contextualIssues: file.analysis?.contextualIssues || []
+        contextualIssues: file.analysis?.contextualIssues || [],
       }
 
       const localRecommendations = generateLocalRecommendations(dataSummary)
@@ -1049,8 +1102,10 @@ Dataset: ${dataSummary.fileName}
 - Current quality score: ${dataSummary.qualityScore}%
 
 Problems found:
-${Object.entries(dataSummary.nullValues).map(([col, count]) => `- ${col}: ${count} missing values`).join('\n')}
-${dataSummary.duplicates > 0 ? `- ${dataSummary.duplicates} duplicate records` : ''}
+${Object.entries(dataSummary.nullValues)
+  .map(([col, count]) => `- ${col}: ${count} missing values`)
+  .join("\n")}
+${dataSummary.duplicates > 0 ? `- ${dataSummary.duplicates} duplicate records` : ""}
 
 Provide 4-6 recommendations in JSON format. For each recommendation, explain:
 1. What the problem is in simple terms (like explaining to a friend)
@@ -1107,9 +1162,9 @@ Focus on practical, business-focused explanations that anyone can understand. Us
         difficulty: rec.difficulty || "medium",
         code: {
           python: rec.pythonCode,
-          sql: rec.sqlCode
+          sql: rec.sqlCode,
         },
-        preview: rec.preview
+        preview: rec.preview,
       }))
 
       setCleaningRecommendations(recommendations)
@@ -1180,7 +1235,7 @@ Focus on:
         timeline: insight.timeline || "Within 1 month",
         costBenefit: insight.costBenefit || "Investment in data quality pays off through better decisions",
         metrics: insight.metrics,
-        actionItems: insight.actionItems || []
+        actionItems: insight.actionItems || [],
       }))
 
       setBusinessInsights(insights)
@@ -1212,7 +1267,7 @@ Focus on:
         totalRows: file.data.length,
         headers: file.headers,
         sampleData: file.data.slice(0, 3),
-        qualityScore: file.analysis?.qualityScore || 0
+        qualityScore: file.analysis?.qualityScore || 0,
       }
 
       const prompt = `You are a friendly data consultant. A business owner asked: "${customPrompt}"
@@ -1220,7 +1275,7 @@ Focus on:
 Their dataset:
 - File: ${dataSummary.fileName}
 - ${dataSummary.totalRows} rows
-- Columns: ${dataSummary.headers.join(', ')}
+- Columns: ${dataSummary.headers.join(", ")}
 - Quality Score: ${dataSummary.qualityScore}%
 
 Provide a helpful, easy-to-understand response that:
@@ -1266,14 +1321,14 @@ Use friendly, conversational language as if you're talking to a colleague who tr
       let totalChanges = 0
 
       for (const recId of selectedRecommendations) {
-        const recommendation = cleaningRecommendations.find(r => r.id === recId)
+        const recommendation = cleaningRecommendations.find((r) => r.id === recId)
         if (!recommendation) continue
 
         switch (recommendation.category) {
           case "missing_data":
-            updatedData = updatedData.map(row => {
+            updatedData = updatedData.map((row) => {
               const newRow = { ...row }
-              Object.keys(newRow).forEach(key => {
+              Object.keys(newRow).forEach((key) => {
                 if (newRow[key] === null || newRow[key] === undefined || newRow[key] === "") {
                   const dataType = file.analysis?.dataTypes?.[key]
                   if (dataType === "number") {
@@ -1293,7 +1348,7 @@ Use friendly, conversational language as if you're talking to a colleague who tr
           case "duplicates":
             const seen = new Set()
             const originalLength = updatedData.length
-            updatedData = updatedData.filter(row => {
+            updatedData = updatedData.filter((row) => {
               const rowString = JSON.stringify(row)
               if (seen.has(rowString)) {
                 return false
@@ -1305,24 +1360,25 @@ Use friendly, conversational language as if you're talking to a colleague who tr
             break
 
           case "formatting":
-            updatedData = updatedData.map(row => {
+            updatedData = updatedData.map((row) => {
               const newRow = { ...row }
-              Object.keys(newRow).forEach(key => {
+              Object.keys(newRow).forEach((key) => {
                 if (typeof newRow[key] === "string") {
                   // Trim whitespace
                   newRow[key] = newRow[key].trim()
-                  
+
                   // Standardize case based on field type
                   if (key.toLowerCase().includes("email")) {
                     newRow[key] = newRow[key].toLowerCase()
                   } else if (key.toLowerCase().includes("name") || key.toLowerCase().includes("city")) {
-                    newRow[key] = newRow[key].replace(/\w\S*/g, (txt) => 
-                      txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
+                    newRow[key] = newRow[key].replace(
+                      /\w\S*/g,
+                      (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase(),
                     )
                   }
-                  
+
                   // Remove multiple spaces
-                  newRow[key] = newRow[key].replace(/\s+/g, ' ')
+                  newRow[key] = newRow[key].replace(/\s+/g, " ")
                   totalChanges++
                 }
               })
@@ -1331,9 +1387,9 @@ Use friendly, conversational language as if you're talking to a colleague who tr
             break
 
           case "validation":
-            updatedData = updatedData.map(row => {
+            updatedData = updatedData.map((row) => {
               const newRow = { ...row }
-              Object.keys(newRow).forEach(key => {
+              Object.keys(newRow).forEach((key) => {
                 // Fix common validation issues
                 if (key.toLowerCase().includes("email") && typeof newRow[key] === "string") {
                   if (!newRow[key].includes("@")) {
@@ -1342,7 +1398,7 @@ Use friendly, conversational language as if you're talking to a colleague who tr
                   }
                 }
                 if (key.toLowerCase().includes("phone") && typeof newRow[key] === "string") {
-                  newRow[key] = newRow[key].replace(/[^0-9]/g, '')
+                  newRow[key] = newRow[key].replace(/[^0-9]/g, "")
                   totalChanges++
                 }
                 if (key.toLowerCase().includes("price") && typeof newRow[key] === "number") {
@@ -1364,9 +1420,253 @@ Use friendly, conversational language as if you're talking to a colleague who tr
         efficiency: {
           ...file.efficiency!,
           fixesApplied: (file.efficiency?.fixesApplied || 0) + totalChanges,
-          dataQualityImprovement: 20
-        }
+          dataQualityImprovement: 20,
+        },
       }
 
       onFileUpdate(updatedFile)
-      set
+      setCleaningRecommendations([])
+      setBusinessInsights([])
+      setSelectedRecommendations(new Set())
+      toast.success(`Applied ${selectedRecommendations.size} recommendations and fixed ${totalChanges} issues!`)
+    } catch (error) {
+      console.error("Error applying recommendations:", error)
+      toast.error("Failed to apply recommendations")
+    }
+  }, [file, cleaningRecommendations, onFileUpdate, selectedRecommendations])
+
+  /* -----------------------------------------------------------------------
+   * State
+   * -------------------------------------------------------------------- */
+  const [isOnlineState, setIsOnlineState] = useState<boolean>(navigator.onLine)
+  const [isAnalysingState, setIsAnalysingState] = useState(false)
+  const [progressState, setProgressState] = useState(0)
+  const [recommendationsState, setRecommendationsState] = useState<string[]>([])
+  const [insightsState, setInsightsState] = useState<string[]>([])
+  const [customPromptState, setCustomPromptState] = useState("")
+  const [customAnswerState, setCustomAnswerState] = useState<string | null>(null)
+
+  /* -----------------------------------------------------------------------
+   * Connectivity watcher
+   * -------------------------------------------------------------------- */
+  useEffect(() => {
+    const setOnline = () => setIsOnlineState(true)
+    const setOffline = () => setIsOnlineState(false)
+    window.addEventListener("online", setOnline)
+    window.addEventListener("offline", setOffline)
+    setIsOnlineState(navigator.onLine)
+    return () => {
+      window.removeEventListener("online", setOnline)
+      window.removeEventListener("offline", setOffline)
+    }
+  }, [])
+
+  /* -----------------------------------------------------------------------
+   * Fake analysis – replace with real AI later
+   * -------------------------------------------------------------------- */
+  const runAnalysisState = useCallback(async () => {
+    if (isAnalysingState) return
+    setIsAnalysingState(true)
+    setProgressState(0)
+    // Tiny progress animation
+    const timer = setInterval(() => {
+      setProgressState((p) => (p >= 90 ? p : p + 10))
+    }, 150)
+    try {
+      // When offline OR using fallback, rely on LOCAL_KB
+      const recs: string[] = []
+      const nulls = Object.values(file.analysis?.nullValues ?? {}).reduce((a, b) => a + b, 0) > 0
+      const dups = (file.analysis?.duplicates ?? 0) > 0
+      if (nulls) recs.push(LOCAL_KB.missingData)
+      if (dups) recs.push(LOCAL_KB.duplicates)
+      recs.push(LOCAL_KB.formatting)
+
+      // Simple business insight
+      const insight =
+        file.analysis?.qualityScore && file.analysis.qualityScore < 60
+          ? "Overall data quality is low – improve before taking key decisions."
+          : "Data quality is adequate – maintain and monitor regularly."
+      setRecommendationsState(recs)
+      setInsightsState([insight])
+    } finally {
+      clearInterval(timer)
+      setProgressState(100)
+      setTimeout(() => {
+        setIsAnalysingState(false)
+        setProgressState(0)
+      }, 300)
+    }
+  }, [file, isAnalysingState])
+
+  /* -----------------------------------------------------------------------
+   * Simple Q&A using local KB (works offline)
+   * -------------------------------------------------------------------- */
+  const answerPromptState = () => {
+    if (!customPromptState.trim()) return
+    const text = customPromptState.toLowerCase()
+    let answer: string | undefined
+    if (text.includes("missing")) answer = LOCAL_KB.missingData
+    else if (text.includes("duplicate")) answer = LOCAL_KB.duplicates
+    else if (text.includes("format")) answer = LOCAL_KB.formatting
+    else answer = "Good question! Ensure you have clean, complete data before making decisions."
+    setCustomAnswerState(answer)
+  }
+
+  /* -----------------------------------------------------------------------
+   * Tiny util renderer
+   * -------------------------------------------------------------------- */
+  const list = (items: string[]): ReactNode =>
+    items.map((t, i) => (
+      <Card key={i}>
+        <CardContent className="p-4 text-sm">{t}</CardContent>
+      </Card>
+    ))
+
+  /* -----------------------------------------------------------------------
+   * Render
+   * -------------------------------------------------------------------- */
+  return (
+    <div className="space-y-6">
+      {/* ───────────────────────────────────────────────────────── Header */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <Brain className="h-6 w-6 text-purple-600" />
+            AI&nbsp;Data&nbsp;Assistant
+          </h2>
+          <p className="text-gray-600 text-sm">Friendly suggestions to improve your data</p>
+          <Alert className="mt-2">
+            {isOnlineState ? <Wifi /> : <WifiOff />}
+            <AlertDescription className="pl-2 text-xs">
+              {isOnlineState ? "Online – AI features ready (stub)" : "Offline – using built-in knowledge"}
+            </AlertDescription>
+          </Alert>
+        </div>
+        <div className="flex flex-col gap-2">
+          <Button onClick={runAnalysisState} disabled={isAnalysingState}>
+            <Wand2 className="h-4 w-4 mr-2" />
+            {isAnalysingState ? "Analysing…" : "Analyse Data"}
+          </Button>
+          <Button variant="outline">
+            <Download className="h-4 w-4 mr-2" />
+            Export Report
+          </Button>
+        </div>
+      </div>
+
+      {/* ─────────────────────────────────────────────── Progress Bar */}
+      {isAnalysingState && (
+        <Card>
+          <CardContent className="py-6">
+            <Progress value={progressState} className="w-full" />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─────────────────────────────────────────────── Tabs */}
+      <Tabs defaultValue="recommendations" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="recommendations">
+            Fixes&nbsp;
+            <Badge variant="secondary">{recommendationsState.length}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="insights">
+            Insights&nbsp;
+            <Badge variant="secondary">{insightsState.length}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="ask">Ask&nbsp;AI</TabsTrigger>
+          <TabsTrigger value="learn">
+            <BookOpen className="h-4 w-4" />
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ─────────────── Recommendations */}
+        <TabsContent value="recommendations">
+          {recommendationsState.length === 0 ? (
+            <Card>
+              <CardContent className="p-6 text-center space-y-3">
+                <Lightbulb className="h-8 w-8 mx-auto text-gray-400" />
+                <p>No recommendations yet.</p>
+                <Button onClick={runAnalysisState}>Get Suggestions</Button>
+              </CardContent>
+            </Card>
+          ) : (
+            list(recommendationsState)
+          )}
+        </TabsContent>
+
+        {/* ─────────────── Insights */}
+        <TabsContent value="insights">
+          {insightsState.length === 0 ? (
+            <Card>
+              <CardContent className="p-6 text-center">
+                <p>No insights yet.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            list(insightsState)
+          )}
+        </TabsContent>
+
+        {/* ─────────────── Ask AI */}
+        <TabsContent value="ask">
+          <Card>
+            <CardHeader>
+              <CardTitle>Ask a question</CardTitle>
+              <CardDescription>Works offline with a smaller knowledge base.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="prompt">Your question</Label>
+                <Input
+                  id="prompt"
+                  value={customPromptState}
+                  onChange={(e) => setCustomPromptState(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && answerPromptState()}
+                  placeholder="e.g. Why does missing data matter?"
+                />
+              </div>
+              <Button onClick={answerPromptState} disabled={!customPromptState.trim()}>
+                <Brain className="h-4 w-4 mr-2" /> Get answer
+              </Button>
+
+              {customAnswerState && (
+                <ScrollArea className="h-40 border rounded-md p-3 text-sm">{customAnswerState}</ScrollArea>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ─────────────── Learn */}
+        <TabsContent value="learn">
+          <Card>
+            <CardHeader>
+              <CardTitle>Why clean data?</CardTitle>
+              <CardDescription>Quick facts for non-technical users</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              <p>
+                High-quality data is like fresh ingredients in cooking – the better the input, the better the outcome.
+                Clean data leads to accurate reports and smarter decisions.
+              </p>
+              <ul className="space-y-2 pl-5 list-disc">
+                <li>
+                  <CheckCircle className="inline h-4 w-4 text-green-600 mr-1" />
+                  Better customer insights
+                </li>
+                <li>
+                  <CheckCircle className="inline h-4 w-4 text-green-600 mr-1" />
+                  Cost savings by avoiding bad decisions
+                </li>
+                <li>
+                  <AlertTriangle className="inline h-4 w-4 text-yellow-500 mr-1" />
+                  Reduced risk of compliance issues
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
