@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, type ReactNode } from "react"
+import { useState, useEffect, useCallback } from "react"
 import type { FileData } from "@/app/page"
 import { groq } from "@ai-sdk/groq"
 import { generateText } from "ai"
@@ -15,8 +15,20 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 
-import { Brain, Wand2, Download, Wifi, WifiOff, Lightbulb, BookOpen, CheckCircle, AlertTriangle } from "lucide-react"
+import {
+  Brain,
+  Wand2,
+  Download,
+  Wifi,
+  WifiOff,
+  Lightbulb,
+  BookOpen,
+  CheckCircle,
+  AlertTriangle,
+  Info,
+} from "lucide-react"
 
 /**
  * Props for the AiDataAssistant component
@@ -102,12 +114,6 @@ const LOCAL_KNOWLEDGE_BASE = {
         "Set up regular automated data quality checks",
         "Create backup systems for data collection",
       ],
-      businessExamples: [
-        "E-commerce: Missing customer addresses prevent order delivery",
-        "Healthcare: Missing patient information can affect treatment decisions",
-        "Finance: Missing transaction details can cause audit problems",
-        "Marketing: Missing contact info means you can't reach customers",
-      ],
     },
     duplicates: {
       title: "Duplicate Records",
@@ -135,46 +141,6 @@ const LOCAL_KNOWLEDGE_BASE = {
         "Schedule regular database cleanup and maintenance",
         "Train staff on proper data entry procedures",
         "Implement 'merge' features instead of creating new records",
-      ],
-      businessExamples: [
-        "Customer database: Same customer appears multiple times, inflating customer count",
-        "Inventory: Same product listed twice, causing stock count errors",
-        "Employee records: Same person in system multiple times, payroll confusion",
-        "Sales data: Same transaction recorded twice, inflated revenue numbers",
-      ],
-    },
-    outliers: {
-      title: "Unusual Values (Outliers)",
-      explanation:
-        "Outliers are like finding a 200-year-old person in your customer database - values that are much higher or lower than what you'd normally expect. They stand out from the crowd.",
-      businessImpact:
-        "Outliers can indicate data entry errors, fraud, or genuinely special cases that need attention. They can also skew your analysis and make averages misleading.",
-      commonCauses: [
-        "Data entry mistakes (like typing an extra zero: $1000 becomes $10000)",
-        "Using wrong units (entering feet instead of inches)",
-        "System errors or data corruption during transfer",
-        "Genuine exceptional cases (like a very large order or very old customer)",
-        "Different measurement standards from various data sources",
-      ],
-      solutions: [
-        "Verify unusual values by checking with original sources",
-        "Correct obvious errors (like removing extra zeros)",
-        "Keep genuine outliers but flag them for special attention",
-        "Use statistical methods to automatically identify unusual values",
-        "Set reasonable limits for data entry to prevent extreme values",
-      ],
-      preventionTips: [
-        "Set minimum and maximum limits in data entry forms",
-        "Add validation rules that flag unusual values for review",
-        "Train staff to double-check extreme values before saving",
-        "Implement automated outlier detection systems",
-        "Create alerts for values outside normal ranges",
-      ],
-      businessExamples: [
-        "Sales: $1,000,000 order when typical orders are $100 (could be error or major client)",
-        "Age: 150-year-old customer (likely data entry error)",
-        "Inventory: -500 items in stock (system error, can't have negative inventory)",
-        "Website: 50,000 page views from one user (could be bot or system error)",
       ],
     },
     formatting: {
@@ -204,254 +170,6 @@ const LOCAL_KNOWLEDGE_BASE = {
         "Provide regular training on data quality standards",
         "Use templates and standardized forms for data collection",
       ],
-      businessExamples: [
-        "Phone numbers: Some as (555) 123-4567, others as 555.123.4567 or 5551234567",
-        "Dates: Some as 01/15/2024, others as January 15, 2024 or 15-Jan-24",
-        "Names: Some as 'JOHN SMITH', others as 'john smith' or 'John Smith'",
-        "Addresses: Inconsistent abbreviations like 'St' vs 'Street' vs 'ST'",
-      ],
-    },
-    validation: {
-      title: "Invalid Data",
-      explanation:
-        "Invalid data is information that doesn't make sense or follow expected rules - like having a birth date in the future or an email address without an @ symbol.",
-      businessImpact:
-        "Invalid data leads to wrong conclusions and poor business decisions. It's like trying to navigate with a broken compass - you'll end up going in the wrong direction.",
-      commonCauses: [
-        "Human errors during manual data entry",
-        "System bugs or integration problems between different software",
-        "Outdated information that's no longer accurate",
-        "Lack of validation rules to check data as it's entered",
-        "Data corruption during transfer or storage",
-      ],
-      solutions: [
-        "Check that dates make logical sense (birth dates not in future, end dates after start dates)",
-        "Verify email addresses have proper format (contain @ symbol and valid domain)",
-        "Ensure phone numbers have the correct number of digits for your country",
-        "Validate that numbers are within reasonable ranges for their purpose",
-        "Cross-check related fields for consistency",
-      ],
-      preventionTips: [
-        "Add validation rules to all data entry forms",
-        "Conduct regular data quality audits and reviews",
-        "Train staff on data accuracy and validation importance",
-        "Implement automated validation checks in your systems",
-        "Create data quality dashboards to monitor issues in real-time",
-      ],
-      businessExamples: [
-        "Email: 'john.smith.com' (missing @ symbol, can't send emails)",
-        "Date: Birth date of 01/01/2030 (future date, impossible)",
-        "Phone: '123' (too short, can't contact customer)",
-        "Price: -$50 (negative price, doesn't make business sense)",
-      ],
-    },
-  },
-
-  businessTerms: {
-    data_quality: {
-      term: "Data Quality",
-      definition:
-        "How accurate, complete, and reliable your data is for making business decisions. Think of it like the quality of ingredients when cooking - better ingredients lead to better results.",
-      importance:
-        "Good data quality leads to better insights, smarter business choices, and more confident decision-making.",
-      measuredBy: [
-        "Accuracy (how correct the data is)",
-        "Completeness (how much data is missing)",
-        "Consistency (how uniform the formatting is)",
-        "Timeliness (how up-to-date the data is)",
-      ],
-    },
-    data_cleaning: {
-      term: "Data Cleaning",
-      definition:
-        "The process of fixing errors, removing duplicates, and standardizing your data. It's like organizing and cleaning your workspace to be more productive.",
-      importance: "Clean data gives you confidence in your analysis and reports, leading to better business decisions.",
-      steps: ["Identify problems", "Fix errors", "Remove duplicates", "Standardize formats", "Validate results"],
-    },
-    validation: {
-      term: "Data Validation",
-      definition:
-        "Checking that your data follows the rules and makes sense. Like proofreading a document before sending it to your boss.",
-      importance: "Validation catches errors early before they affect your business decisions and reports.",
-      types: [
-        "Format validation (correct email format)",
-        "Range validation (reasonable ages)",
-        "Logic validation (end date after start date)",
-      ],
-    },
-    outlier: {
-      term: "Outlier",
-      definition:
-        "A data point that is very different from the rest of your data. Like finding a luxury car in a parking lot full of economy cars.",
-      importance:
-        "Outliers can indicate errors, fraud, or special situations that need attention. They can also skew your analysis if not handled properly.",
-      examples: [
-        "Unusually large sale amount",
-        "Customer much older than typical",
-        "Website visitor from unexpected location",
-      ],
-    },
-    duplicate: {
-      term: "Duplicate Record",
-      definition:
-        "The same information appearing multiple times in your database. Like having the same contact saved twice in your phone.",
-      importance: "Duplicates can inflate numbers, waste storage space, and cause confusion in analysis and reporting.",
-      causes: ["Multiple data entry", "System errors", "Data merging issues"],
-    },
-  },
-
-  bestPractices: [
-    {
-      title: "Regular Data Health Checks",
-      description:
-        "Schedule monthly or quarterly reviews of your data quality to catch issues before they become big problems.",
-      benefits: [
-        "Prevents small problems from becoming expensive disasters",
-        "Maintains trust and confidence in your data",
-        "Saves time and money in the long run",
-        "Helps you spot trends and patterns in data quality",
-      ],
-      howTo: [
-        "Set up automated data quality reports",
-        "Review key metrics monthly",
-        "Create alerts for unusual data patterns",
-        "Document and track improvements over time",
-      ],
-      timeInvestment: "2-4 hours per month",
-      roi: "Prevents costly mistakes and improves decision quality",
-    },
-    {
-      title: "Standardize Data Entry Processes",
-      description: "Create clear, consistent guidelines for how data should be entered into your systems.",
-      benefits: [
-        "Reduces errors and inconsistencies significantly",
-        "Makes data much easier to analyze and report on",
-        "Improves team efficiency and reduces training time",
-        "Creates a professional, organized data environment",
-      ],
-      howTo: [
-        "Write clear data entry guidelines",
-        "Create templates and examples",
-        "Use dropdown menus instead of free text",
-        "Implement validation rules in forms",
-      ],
-      timeInvestment: "1-2 weeks initial setup",
-      roi: "Dramatically reduces data quality issues going forward",
-    },
-    {
-      title: "Train Your Team on Data Quality",
-      description: "Educate all staff members on the importance of data quality and proper procedures.",
-      benefits: [
-        "Fewer data entry errors from the start",
-        "Better understanding of why data quality matters",
-        "Improved data culture throughout the organization",
-        "More proactive identification and reporting of issues",
-      ],
-      howTo: [
-        "Conduct regular training sessions",
-        "Share real examples of data quality impact",
-        "Create easy-to-follow reference guides",
-        "Recognize and reward good data practices",
-      ],
-      timeInvestment: "2-3 hours per quarter per person",
-      roi: "Prevents errors and builds data-conscious culture",
-    },
-    {
-      title: "Use Technology to Prevent Errors",
-      description:
-        "Implement validation rules, dropdown menus, and automated checks to catch errors before they enter your system.",
-      benefits: [
-        "Prevents errors at the source, not after they've caused problems",
-        "Saves significant time on manual data checking and correction",
-        "Ensures consistency across all data entry points",
-        "Provides immediate feedback to users about data issues",
-      ],
-      howTo: [
-        "Add validation rules to all forms",
-        "Use dropdown menus for standardized options",
-        "Implement real-time error checking",
-        "Set up automated data quality monitoring",
-      ],
-      timeInvestment: "1-3 weeks depending on system complexity",
-      roi: "Massive reduction in data quality issues and correction time",
-    },
-  ],
-
-  industrySpecificGuidance: {
-    retail: {
-      commonIssues: [
-        "Product name inconsistencies",
-        "Price formatting",
-        "Inventory count errors",
-        "Customer duplicate records",
-      ],
-      priorities: ["Product data accuracy", "Customer information completeness", "Sales data validation"],
-      specificTips: [
-        "Standardize product naming conventions",
-        "Validate price ranges",
-        "Regular inventory reconciliation",
-      ],
-    },
-    healthcare: {
-      commonIssues: [
-        "Patient information accuracy",
-        "Date formatting",
-        "Medical code validation",
-        "Insurance information",
-      ],
-      priorities: ["Patient safety through data accuracy", "Compliance with regulations", "Complete medical histories"],
-      specificTips: ["Double-check patient identifiers", "Validate medical codes", "Ensure date consistency"],
-    },
-    finance: {
-      commonIssues: [
-        "Transaction amount accuracy",
-        "Account number validation",
-        "Date consistency",
-        "Currency formatting",
-      ],
-      priorities: ["Transaction accuracy", "Regulatory compliance", "Audit trail completeness"],
-      specificTips: ["Implement amount validation", "Standardize date formats", "Regular reconciliation processes"],
-    },
-    education: {
-      commonIssues: [
-        "Student information accuracy",
-        "Grade data validation",
-        "Enrollment status",
-        "Contact information",
-      ],
-      priorities: ["Student record accuracy", "Academic data integrity", "Communication capability"],
-      specificTips: ["Validate student IDs", "Check grade ranges", "Maintain current contact information"],
-    },
-  },
-
-  quickFixes: {
-    remove_extra_spaces: {
-      title: "Remove Extra Spaces",
-      description: "Clean up text by removing extra spaces at the beginning, end, or between words",
-      difficulty: "easy",
-      timeEstimate: "5 minutes",
-      businessImpact: "Improves data consistency and search functionality",
-    },
-    standardize_case: {
-      title: "Standardize Text Case",
-      description: "Make all text consistently formatted (Title Case, UPPERCASE, or lowercase)",
-      difficulty: "easy",
-      timeEstimate: "10 minutes",
-      businessImpact: "Improves data appearance and reduces duplicate detection issues",
-    },
-    fill_missing_with_unknown: {
-      title: "Fill Missing Text with 'Unknown'",
-      description: "Replace empty text fields with a standard 'Unknown' or 'Not Specified' value",
-      difficulty: "easy",
-      timeEstimate: "5 minutes",
-      businessImpact: "Eliminates blank fields and improves report completeness",
-    },
-    remove_exact_duplicates: {
-      title: "Remove Exact Duplicates",
-      description: "Find and remove rows that are completely identical",
-      difficulty: "medium",
-      timeEstimate: "15 minutes",
-      businessImpact: "Reduces data storage and improves accuracy of counts and analysis",
     },
   },
 
@@ -467,29 +185,11 @@ const LOCAL_KNOWLEDGE_BASE = {
 
     what_should_i_fix_first:
       "Start with issues that have the biggest business impact: 1) Missing critical information (like customer contact details), 2) Obvious errors (like negative prices or future birth dates), 3) Duplicates that inflate your numbers, 4) Formatting issues that prevent analysis. Focus on data you use most frequently for important decisions.",
-
-    how_do_i_prevent_future_problems:
-      "Prevention is much easier than fixing problems later. Set up validation rules in your data entry systems, train your team on proper data entry, use dropdown menus instead of free text when possible, and schedule regular data quality checks. Think of it like maintaining your car - regular maintenance prevents expensive repairs.",
-
-    what_if_i_delete_important_data:
-      "Always make a backup copy of your original data before making any changes. Most data cleaning tools allow you to preview changes before applying them. Start with small, safe changes and gradually work up to more complex fixes. When in doubt, flag questionable data for review rather than deleting it immediately.",
   },
 }
 
-/* -----------------------------------------------------------------------------
- * Simple local knowledge base for offline / fallback explanations
- * -------------------------------------------------------------------------- */
-const LOCAL_KB = {
-  missingData:
-    "Some cells are empty – like blanks in a form. Filling them helps you see the complete picture and make better decisions.",
-  duplicates:
-    "Duplicate rows inflate your numbers (imagine counting the same customer twice). Removing them gives you accurate stats.",
-  formatting:
-    "Inconsistent formatting (e.g. mixed capitalisation) makes data hard to analyse. Standardising keeps everything neat.",
-}
-
 /**
- * AI Data Assistant Component with Comprehensive Local Knowledge Base
+ * AI Data Assistant Component with Groq AI Integration
  */
 export function AiDataAssistant({ file, onFileUpdate }: AiDataAssistantProps) {
   // ============================================================================
@@ -507,7 +207,6 @@ export function AiDataAssistant({ file, onFileUpdate }: AiDataAssistantProps) {
   const [activeTab, setActiveTab] = useState("recommendations")
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [useLocalKnowledge, setUseLocalKnowledge] = useState(false)
-  const [selectedIndustry, setSelectedIndustry] = useState<string>("")
 
   // Monitor online status
   useEffect(() => {
@@ -528,7 +227,7 @@ export function AiDataAssistant({ file, onFileUpdate }: AiDataAssistantProps) {
   // ============================================================================
 
   /**
-   * Generate recommendations using comprehensive local knowledge base
+   * Generate recommendations using local knowledge base
    */
   const generateLocalRecommendations = useCallback((dataSummary: any): CleaningRecommendation[] => {
     const recommendations: CleaningRecommendation[] = []
@@ -659,163 +358,6 @@ WHERE id IN (
       })
     }
 
-    // Check for formatting issues
-    const hasFormattingIssues = dataSummary.contextualIssues?.some(
-      (issue: any) =>
-        issue.issue.toLowerCase().includes("format") ||
-        issue.issue.toLowerCase().includes("inconsistent") ||
-        issue.issue.toLowerCase().includes("case"),
-    )
-
-    if (
-      hasFormattingIssues ||
-      dataSummary.headers.some((h: string) =>
-        dataSummary.sampleData.some(
-          (row: any) =>
-            typeof row[h] === "string" &&
-            (row[h]?.includes("  ") || // multiple spaces
-              row[h] !== row[h]?.trim() || // leading/trailing spaces
-              (/[A-Z]/.test(row[h]) && /[a-z]/.test(row[h]))), // mixed case
-        ),
-      )
-    ) {
-      const knowledge = LOCAL_KNOWLEDGE_BASE.dataQualityRules.formatting
-
-      recommendations.push({
-        id: "local_formatting",
-        title: "Standardize Data Formatting",
-        description: "Your data has inconsistent formatting that should be standardized.",
-        userFriendlyExplanation: `${knowledge.explanation} This makes your data harder to work with and can cause errors in analysis. It's like having a filing cabinet where some files are labeled 'Smith, John' and others 'JOHN SMITH' - you might miss important information when searching.`,
-        impact: "medium",
-        confidence: 0.85,
-        affectedRows: dataSummary.contextualIssues?.length || Math.floor(dataSummary.totalRows * 0.3),
-        category: "formatting",
-        businessImpact: knowledge.businessImpact,
-        stepByStepGuide: [
-          "1. Identify which columns have formatting problems (look for mixed cases, extra spaces, inconsistent abbreviations)",
-          "2. Choose a standard format for each type of data (like 'Title Case' for names, 'lowercase' for emails)",
-          "3. Clean up extra spaces at the beginning and end of text",
-          "4. Make text case consistent throughout each column",
-          "5. Standardize abbreviations (decide on 'St' or 'Street', stick with one)",
-          "6. Create formatting guidelines for future data entry",
-        ],
-        estimatedTimeToFix: "20-45 minutes",
-        difficulty: "easy",
-        code: {
-          python: `# Standardize text formatting
-import pandas as pd
-
-# Remove extra whitespace from all text columns
-text_columns = df.select_dtypes(include=['object']).columns
-for col in text_columns:
-    df[col] = df[col].astype(str).str.strip()
-
-# Standardize specific formatting
-df['name'] = df['name'].str.title()  # Title Case for names
-df['email'] = df['email'].str.lower()  # lowercase for emails
-df['city'] = df['city'].str.title()   # Title Case for cities
-
-# Remove multiple spaces between words
-for col in text_columns:
-    df[col] = df[col].str.replace(r'\\s+', ' ', regex=True)
-
-print("Formatting standardized across all text fields")`,
-          sql: `-- Standardize formatting in SQL
-UPDATE your_table 
-SET 
-  name = TRIM(INITCAP(name)),           -- Title Case, remove spaces
-  email = TRIM(LOWER(email)),           -- lowercase emails
-  city = TRIM(INITCAP(city)),           -- Title Case cities
-  phone = REGEXP_REPLACE(phone, '[^0-9]', '', 'g'); -- numbers only
-
--- Remove multiple spaces
-UPDATE your_table 
-SET text_column = REGEXP_REPLACE(text_column, '\\s+', ' ', 'g')
-WHERE text_column IS NOT NULL;`,
-        },
-        preview:
-          "Will standardize formatting across all text fields, making your data consistent and professional-looking",
-      })
-    }
-
-    // Check for validation issues
-    const hasValidationIssues = dataSummary.contextualIssues?.some(
-      (issue: any) =>
-        issue.issue.toLowerCase().includes("invalid") ||
-        issue.issue.toLowerCase().includes("error") ||
-        issue.issue.toLowerCase().includes("wrong"),
-    )
-
-    if (hasValidationIssues) {
-      const knowledge = LOCAL_KNOWLEDGE_BASE.dataQualityRules.validation
-
-      recommendations.push({
-        id: "local_validation",
-        title: "Fix Invalid Data",
-        description: "Your data contains values that don't make sense or follow expected rules.",
-        userFriendlyExplanation: `${knowledge.explanation} This is like having directions that tell you to turn left on a one-way street going right - the information doesn't make sense and will lead you astray.`,
-        impact: "high",
-        confidence: 0.9,
-        affectedRows: dataSummary.contextualIssues?.length || 0,
-        category: "validation",
-        businessImpact: knowledge.businessImpact,
-        stepByStepGuide: [
-          "1. Review the specific validation errors identified in your data",
-          "2. Check dates to make sure they're logical (birth dates not in future, end dates after start dates)",
-          "3. Verify email addresses have @ symbols and proper domain names",
-          "4. Ensure phone numbers have the right number of digits",
-          "5. Check that numbers are within reasonable ranges for their purpose",
-          "6. Cross-check related fields to make sure they're consistent with each other",
-        ],
-        estimatedTimeToFix: "30-90 minutes",
-        difficulty: "medium",
-        code: {
-          python: `# Fix common validation issues
-import pandas as pd
-from datetime import datetime
-
-# Fix email addresses (must contain @)
-invalid_emails = df[~df['email'].str.contains('@', na=False)]
-print(f"Found {len(invalid_emails)} invalid email addresses")
-df.loc[~df['email'].str.contains('@', na=False), 'email'] = 'invalid@example.com'
-
-# Fix future birth dates
-today = datetime.now()
-future_births = df[pd.to_datetime(df['birth_date'], errors='coerce') > today]
-print(f"Found {len(future_births)} future birth dates")
-df.loc[pd.to_datetime(df['birth_date'], errors='coerce') > today, 'birth_date'] = None
-
-# Fix negative prices
-negative_prices = df[df['price'] < 0]
-print(f"Found {len(negative_prices)} negative prices")
-df.loc[df['price'] < 0, 'price'] = abs(df.loc[df['price'] < 0, 'price'])
-
-print("Validation issues fixed")`,
-          sql: `-- Fix common validation issues
--- Fix invalid email addresses
-UPDATE your_table 
-SET email = 'invalid@example.com' 
-WHERE email NOT LIKE '%@%' OR email IS NULL;
-
--- Fix future birth dates
-UPDATE your_table 
-SET birth_date = NULL 
-WHERE birth_date > CURRENT_DATE;
-
--- Fix negative prices
-UPDATE your_table 
-SET price = ABS(price) 
-WHERE price < 0;
-
--- Fix phone numbers (keep only digits)
-UPDATE your_table 
-SET phone = REGEXP_REPLACE(phone, '[^0-9]', '', 'g')
-WHERE LENGTH(REGEXP_REPLACE(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 15;`,
-        },
-        preview: "Will fix invalid data entries, making your data logically consistent and reliable for analysis",
-      })
-    }
-
     return recommendations
   }, [])
 
@@ -829,29 +371,21 @@ WHERE LENGTH(REGEXP_REPLACE(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 15;`,
     const qualityScore = dataSummary.qualityScore || 0
     let qualityLevel = "Poor"
     let priority: "low" | "medium" | "high" | "critical" = "critical"
-    let timeline = "Immediate action needed"
-    let costBenefit = "High cost of poor decisions vs. low cost of data cleaning"
 
     if (qualityScore >= 90) {
       qualityLevel = "Excellent"
       priority = "low"
-      timeline = "Maintain current standards"
-      costBenefit = "Continue current practices to maintain competitive advantage"
     } else if (qualityScore >= 70) {
       qualityLevel = "Good"
       priority = "medium"
-      timeline = "Improve over next 2-4 weeks"
-      costBenefit = "Moderate investment for significant improvement in decision quality"
     } else if (qualityScore >= 50) {
       qualityLevel = "Fair"
       priority = "high"
-      timeline = "Address within 1-2 weeks"
-      costBenefit = "Essential investment to prevent costly mistakes"
     }
 
     insights.push({
       id: "local_quality_insight",
-      title: `Data Quality Health Check: ${qualityLevel} (${qualityScore}%)`,
+      title: `Data Quality Assessment: ${qualityLevel} (${qualityScore}%)`,
       description: `Your overall data quality score is ${qualityScore}%, indicating ${qualityLevel.toLowerCase()} data quality.`,
       userFriendlyExplanation: `Think of data quality like your credit score - it tells you how trustworthy your data is for making important decisions. A score of ${qualityScore}% means your data is ${qualityLevel.toLowerCase()}. ${qualityScore >= 70 ? "This gives you good confidence in making business decisions based on your data." : "This means you should be cautious about making important decisions based on this data until you improve its quality."}`,
       impact:
@@ -863,94 +397,25 @@ WHERE LENGTH(REGEXP_REPLACE(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 15;`,
           ? "Maintain current data quality standards and continue monitoring"
           : "Immediate action needed to improve data quality before making important business decisions",
       priority,
-      timeline,
-      costBenefit,
+      timeline: qualityScore >= 70 ? "Maintain current standards" : "Address within 1-2 weeks",
+      costBenefit:
+        qualityScore >= 70
+          ? "Continue current practices to maintain competitive advantage"
+          : "Essential investment to prevent costly mistakes",
       actionItems:
         qualityScore >= 70
           ? [
               "Continue regular data quality monitoring",
               "Document current best practices for your team",
               "Train new team members on your data standards",
-              "Set up automated alerts for quality drops",
             ]
           : [
               "Address missing data and duplicates immediately",
               "Implement data validation rules in your systems",
               "Create clear data entry guidelines for your team",
               "Schedule weekly data quality reviews until improvement",
-              "Consider data cleaning tools or professional help",
             ],
     })
-
-    // Missing data insight
-    const totalNulls = Object.values(dataSummary.nullValues).reduce((sum: number, count: any) => sum + count, 0)
-    const nullPercentage = Math.round((totalNulls / (dataSummary.totalRows * dataSummary.totalColumns)) * 100)
-
-    if (nullPercentage > 5) {
-      insights.push({
-        id: "local_missing_insight",
-        title: `Missing Data Impact: ${nullPercentage}% of Your Data is Incomplete`,
-        description: `${nullPercentage}% of your data is missing, which significantly impacts business decision reliability.`,
-        userFriendlyExplanation: `Imagine trying to complete a jigsaw puzzle with ${nullPercentage}% of the pieces missing - you can't see the full picture. That's what missing data does to your business analysis. With ${nullPercentage}% missing data, you're making decisions with incomplete information, which increases the risk of poor outcomes.`,
-        impact:
-          nullPercentage > 20
-            ? "Critical impact: Analysis is unreliable, decisions may be seriously flawed"
-            : nullPercentage > 10
-              ? "High impact: Significant gaps in analysis, increased risk of wrong decisions"
-              : "Moderate impact: Some analysis limitations, but manageable with proper handling",
-        recommendation:
-          nullPercentage > 20
-            ? "Stop using this data for important decisions until missing data is addressed"
-            : "Prioritize filling critical missing data and implement prevention processes",
-        priority: nullPercentage > 20 ? "critical" : nullPercentage > 10 ? "high" : "medium",
-        timeline: nullPercentage > 20 ? "Within 1 week" : nullPercentage > 10 ? "Within 2-3 weeks" : "Within 1 month",
-        costBenefit: "Cost of data collection vs. cost of wrong decisions due to incomplete information",
-        metrics: {
-          before: nullPercentage,
-          after: Math.max(2, nullPercentage - 15),
-          improvement: Math.min(15, nullPercentage - 2),
-        },
-        actionItems: [
-          "Identify which missing data is most critical for your key business decisions",
-          "Reach out to original data sources to fill the most important gaps",
-          "Implement required fields in data collection forms going forward",
-          "Create backup data collection methods for critical information",
-          "Set up alerts when data completeness drops below acceptable levels",
-        ],
-      })
-    }
-
-    // Duplicate data insight
-    if (dataSummary.duplicates > 0) {
-      const duplicatePercentage = Math.round((dataSummary.duplicates / dataSummary.totalRows) * 100)
-
-      insights.push({
-        id: "local_duplicate_insight",
-        title: `Duplicate Records: ${duplicatePercentage}% Inflation in Your Numbers`,
-        description: `${dataSummary.duplicates} duplicate records are inflating your counts and potentially skewing analysis.`,
-        userFriendlyExplanation: `Having ${duplicatePercentage}% duplicate records is like counting the same customers ${duplicatePercentage}% more than once - it makes your business look bigger than it actually is. This can lead to overestimating demand, ordering too much inventory, or making other decisions based on inflated numbers.`,
-        impact:
-          duplicatePercentage > 10
-            ? "High impact: Significantly inflated numbers affecting business planning and resource allocation"
-            : "Moderate impact: Some inflation in numbers, but manageable with awareness",
-        recommendation: "Remove duplicates to get accurate counts and reliable analysis",
-        priority: duplicatePercentage > 10 ? "high" : "medium",
-        timeline: "Within 1-2 weeks",
-        costBenefit: "Small time investment for significantly more accurate business metrics",
-        metrics: {
-          before: dataSummary.totalRows,
-          after: dataSummary.totalRows - dataSummary.duplicates,
-          improvement: duplicatePercentage,
-        },
-        actionItems: [
-          "Remove duplicate records to get accurate counts",
-          "Review processes that might be creating duplicates",
-          "Implement duplicate prevention in data entry systems",
-          "Set up regular duplicate detection and removal",
-          "Train team on recognizing and preventing duplicate entry",
-        ],
-      })
-    }
 
     return insights
   }, [])
@@ -971,11 +436,7 @@ WHERE LENGTH(REGEXP_REPLACE(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 15;`,
           (key === "why_does_data_quality_matter" && lowerPrompt.includes("why") && lowerPrompt.includes("matter")) ||
           (key === "how_long_does_cleaning_take" &&
             (lowerPrompt.includes("how long") || lowerPrompt.includes("time"))) ||
-          (key === "what_should_i_fix_first" && (lowerPrompt.includes("first") || lowerPrompt.includes("priority"))) ||
-          (key === "how_do_i_prevent_future_problems" &&
-            (lowerPrompt.includes("prevent") || lowerPrompt.includes("future"))) ||
-          (key === "what_if_i_delete_important_data" &&
-            (lowerPrompt.includes("delete") || lowerPrompt.includes("remove")))
+          (key === "what_should_i_fix_first" && (lowerPrompt.includes("first") || lowerPrompt.includes("priority")))
         ) {
           return response
         }
@@ -994,12 +455,7 @@ WHERE LENGTH(REGEXP_REPLACE(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 15;`,
 
       if (lowerPrompt.includes("format") || lowerPrompt.includes("consistent") || lowerPrompt.includes("standard")) {
         const knowledge = LOCAL_KNOWLEDGE_BASE.dataQualityRules.formatting
-        return `${knowledge.explanation}\n\n**Business Impact:** ${knowledge.businessImpact}\n\n**Solutions:** ${knowledge.solutions.slice(0, 3).join(", ")}\n\n**Examples:** ${knowledge.businessExamples.slice(0, 2).join(", ")}`
-      }
-
-      if (lowerPrompt.includes("invalid") || lowerPrompt.includes("error") || lowerPrompt.includes("wrong")) {
-        const knowledge = LOCAL_KNOWLEDGE_BASE.dataQualityRules.validation
-        return `${knowledge.explanation}\n\n**Business Impact:** ${knowledge.businessImpact}\n\n**Solutions:** ${knowledge.solutions.slice(0, 3).join(", ")}\n\n**Examples:** ${knowledge.businessExamples.slice(0, 2).join(", ")}`
+        return `${knowledge.explanation}\n\n**Business Impact:** ${knowledge.businessImpact}\n\n**Solutions:** ${knowledge.solutions.slice(0, 3).join(", ")}`
       }
 
       // General response
@@ -1106,6 +562,8 @@ ${Object.entries(dataSummary.nullValues)
   .map(([col, count]) => `- ${col}: ${count} missing values`)
   .join("\n")}
 ${dataSummary.duplicates > 0 ? `- ${dataSummary.duplicates} duplicate records` : ""}
+
+Sample data columns: ${dataSummary.headers.join(", ")}
 
 Provide 4-6 recommendations in JSON format. For each recommendation, explain:
 1. What the problem is in simple terms (like explaining to a friend)
@@ -1425,244 +883,509 @@ Use friendly, conversational language as if you're talking to a colleague who tr
       }
 
       onFileUpdate(updatedFile)
-      setCleaningRecommendations([])
-      setBusinessInsights([])
       setSelectedRecommendations(new Set())
-      toast.success(`Applied ${selectedRecommendations.size} recommendations and fixed ${totalChanges} issues!`)
+      toast.success(`Applied ${selectedRecommendations.size} recommendations, made ${totalChanges} changes`)
     } catch (error) {
       console.error("Error applying recommendations:", error)
       toast.error("Failed to apply recommendations")
     }
-  }, [file, cleaningRecommendations, onFileUpdate, selectedRecommendations])
+  }, [selectedRecommendations, cleaningRecommendations, file, onFileUpdate])
 
-  /* -----------------------------------------------------------------------
-   * State
-   * -------------------------------------------------------------------- */
-  const [isOnlineState, setIsOnlineState] = useState<boolean>(navigator.onLine)
-  const [isAnalysingState, setIsAnalysingState] = useState(false)
-  const [progressState, setProgressState] = useState(0)
-  const [recommendationsState, setRecommendationsState] = useState<string[]>([])
-  const [insightsState, setInsightsState] = useState<string[]>([])
-  const [customPromptState, setCustomPromptState] = useState("")
-  const [customAnswerState, setCustomAnswerState] = useState<string | null>(null)
-
-  /* -----------------------------------------------------------------------
-   * Connectivity watcher
-   * -------------------------------------------------------------------- */
-  useEffect(() => {
-    const setOnline = () => setIsOnlineState(true)
-    const setOffline = () => setIsOnlineState(false)
-    window.addEventListener("online", setOnline)
-    window.addEventListener("offline", setOffline)
-    setIsOnlineState(navigator.onLine)
-    return () => {
-      window.removeEventListener("online", setOnline)
-      window.removeEventListener("offline", setOffline)
-    }
-  }, [])
-
-  /* -----------------------------------------------------------------------
-   * Fake analysis – replace with real AI later
-   * -------------------------------------------------------------------- */
-  const runAnalysisState = useCallback(async () => {
-    if (isAnalysingState) return
-    setIsAnalysingState(true)
-    setProgressState(0)
-    // Tiny progress animation
-    const timer = setInterval(() => {
-      setProgressState((p) => (p >= 90 ? p : p + 10))
-    }, 150)
+  /**
+   * Export analysis report
+   */
+  const exportAnalysisReport = useCallback(() => {
     try {
-      // When offline OR using fallback, rely on LOCAL_KB
-      const recs: string[] = []
-      const nulls = Object.values(file.analysis?.nullValues ?? {}).reduce((a, b) => a + b, 0) > 0
-      const dups = (file.analysis?.duplicates ?? 0) > 0
-      if (nulls) recs.push(LOCAL_KB.missingData)
-      if (dups) recs.push(LOCAL_KB.duplicates)
-      recs.push(LOCAL_KB.formatting)
+      const report = {
+        metadata: {
+          fileName: file.name,
+          generatedAt: new Date().toISOString(),
+          totalRows: file.data.length,
+          totalColumns: file.headers.length,
+          qualityScore: file.analysis?.qualityScore || 0,
+          analysisMethod: isOnline && !useLocalKnowledge ? "AI-powered" : "Local knowledge base",
+        },
+        cleaningRecommendations,
+        businessInsights,
+        customAnalysis: customAnalysis || null,
+        knowledgeBase: {
+          dataQualityRules: LOCAL_KNOWLEDGE_BASE.dataQualityRules,
+        },
+      }
 
-      // Simple business insight
-      const insight =
-        file.analysis?.qualityScore && file.analysis.qualityScore < 60
-          ? "Overall data quality is low – improve before taking key decisions."
-          : "Data quality is adequate – maintain and monitor regularly."
-      setRecommendationsState(recs)
-      setInsightsState([insight])
-    } finally {
-      clearInterval(timer)
-      setProgressState(100)
-      setTimeout(() => {
-        setIsAnalysingState(false)
-        setProgressState(0)
-      }, 300)
+      const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${file.name.replace(/\.[^/.]+$/, "")}_ai_analysis.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      toast.success("Analysis report exported successfully!")
+    } catch (error) {
+      console.error("Error exporting report:", error)
+      toast.error("Failed to export analysis report")
     }
-  }, [file, isAnalysingState])
+  }, [file, cleaningRecommendations, businessInsights, customAnalysis, isOnline, useLocalKnowledge])
 
-  /* -----------------------------------------------------------------------
-   * Simple Q&A using local KB (works offline)
-   * -------------------------------------------------------------------- */
-  const answerPromptState = () => {
-    if (!customPromptState.trim()) return
-    const text = customPromptState.toLowerCase()
-    let answer: string | undefined
-    if (text.includes("missing")) answer = LOCAL_KB.missingData
-    else if (text.includes("duplicate")) answer = LOCAL_KB.duplicates
-    else if (text.includes("format")) answer = LOCAL_KB.formatting
-    else answer = "Good question! Ensure you have clean, complete data before making decisions."
-    setCustomAnswerState(answer)
-  }
+  // ============================================================================
+  // COMPONENT RENDER
+  // ============================================================================
 
-  /* -----------------------------------------------------------------------
-   * Tiny util renderer
-   * -------------------------------------------------------------------- */
-  const list = (items: string[]): ReactNode =>
-    items.map((t, i) => (
-      <Card key={i}>
-        <CardContent className="p-4 text-sm">{t}</CardContent>
-      </Card>
-    ))
-
-  /* -----------------------------------------------------------------------
-   * Render
-   * -------------------------------------------------------------------- */
   return (
     <div className="space-y-6">
-      {/* ───────────────────────────────────────────────────────── Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      {/* Header with Status */}
+      <div className="flex justify-between items-start flex-wrap gap-3">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2">
+          <h2 className="text-xl lg:text-2xl font-bold flex items-center gap-2">
             <Brain className="h-6 w-6 text-purple-600" />
-            AI&nbsp;Data&nbsp;Assistant
+            AI Data Assistant
+            {isOnline ? <Wifi className="h-4 w-4 text-green-600" /> : <WifiOff className="h-4 w-4 text-orange-600" />}
           </h2>
-          <p className="text-gray-600 text-sm">Friendly suggestions to improve your data</p>
+          <p className="text-sm lg:text-base text-gray-600">
+            Get intelligent insights and automated cleaning recommendations
+          </p>
+
+          {/* Status Alert */}
           <Alert className="mt-2">
-            {isOnlineState ? <Wifi /> : <WifiOff />}
-            <AlertDescription className="pl-2 text-xs">
-              {isOnlineState ? "Online – AI features ready (stub)" : "Offline – using built-in knowledge"}
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              {isOnline
+                ? useLocalKnowledge
+                  ? "Using local knowledge base for faster, reliable recommendations"
+                  : "Connected to AI service for advanced analysis"
+                : "Offline mode: Using built-in knowledge base for reliable recommendations"}
             </AlertDescription>
           </Alert>
         </div>
+
         <div className="flex flex-col gap-2">
-          <Button onClick={runAnalysisState} disabled={isAnalysingState}>
-            <Wand2 className="h-4 w-4 mr-2" />
-            {isAnalysingState ? "Analysing…" : "Analyse Data"}
-          </Button>
-          <Button variant="outline">
-            <Download className="h-4 w-4 mr-2" />
-            Export Report
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={generateAiAnalysis} disabled={isAnalyzing}>
+              <Wand2 className="h-4 w-4 mr-2" />
+              {isAnalyzing ? "Analyzing..." : "Start Analysis"}
+            </Button>
+
+            {(cleaningRecommendations.length > 0 || businessInsights.length > 0) && (
+              <Button variant="outline" onClick={exportAnalysisReport}>
+                <Download className="h-4 w-4 mr-2" />
+                Export Report
+              </Button>
+            )}
+          </div>
+
+          {isOnline && (
+            <div className="flex items-center gap-2 text-sm">
+              <Checkbox
+                id="useLocal"
+                checked={useLocalKnowledge}
+                onCheckedChange={(checked) => setUseLocalKnowledge(!!checked)}
+              />
+              <label htmlFor="useLocal" className="text-gray-600">
+                Use local knowledge (faster)
+              </label>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ─────────────────────────────────────────────── Progress Bar */}
-      {isAnalysingState && (
+      {/* Analysis Progress */}
+      {isAnalyzing && (
         <Card>
           <CardContent className="py-6">
-            <Progress value={progressState} className="w-full" />
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <span>
+                  {isOnline && !useLocalKnowledge
+                    ? "AI is analyzing your data..."
+                    : "Analyzing with local knowledge base..."}
+                </span>
+                <span>{Math.round(analysisProgress)}%</span>
+              </div>
+              <Progress value={analysisProgress} className="w-full" />
+              <div className="text-xs text-gray-500 text-center">
+                {isOnline && !useLocalKnowledge
+                  ? "This may take a few moments for comprehensive AI analysis"
+                  : "Fast analysis using built-in expertise"}
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {/* ─────────────────────────────────────────────── Tabs */}
-      <Tabs defaultValue="recommendations" className="space-y-4">
-        <TabsList>
+      {/* Main Content Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="recommendations">
-            Fixes&nbsp;
-            <Badge variant="secondary">{recommendationsState.length}</Badge>
+            <Wand2 className="h-4 w-4 mr-1" />
+            Fixes ({cleaningRecommendations.length})
           </TabsTrigger>
           <TabsTrigger value="insights">
-            Insights&nbsp;
-            <Badge variant="secondary">{insightsState.length}</Badge>
+            <Lightbulb className="h-4 w-4 mr-1" />
+            Insights ({businessInsights.length})
           </TabsTrigger>
-          <TabsTrigger value="ask">Ask&nbsp;AI</TabsTrigger>
-          <TabsTrigger value="learn">
-            <BookOpen className="h-4 w-4" />
+          <TabsTrigger value="custom">
+            <Brain className="h-4 w-4 mr-1" />
+            Ask AI
+          </TabsTrigger>
+          <TabsTrigger value="knowledge">
+            <BookOpen className="h-4 w-4 mr-1" />
+            Learn
           </TabsTrigger>
         </TabsList>
 
-        {/* ─────────────── Recommendations */}
-        <TabsContent value="recommendations">
-          {recommendationsState.length === 0 ? (
+        {/* Cleaning Recommendations Tab */}
+        <TabsContent value="recommendations" className="space-y-4">
+          {cleaningRecommendations.length === 0 ? (
             <Card>
-              <CardContent className="p-6 text-center space-y-3">
-                <Lightbulb className="h-8 w-8 mx-auto text-gray-400" />
-                <p>No recommendations yet.</p>
-                <Button onClick={runAnalysisState}>Get Suggestions</Button>
+              <CardContent className="flex items-center justify-center h-64">
+                <div className="text-center">
+                  <Wand2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 mb-4">No recommendations yet</p>
+                  <Button onClick={generateAiAnalysis} disabled={isAnalyzing}>
+                    <Brain className="h-4 w-4 mr-2" />
+                    Get Recommendations
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ) : (
-            list(recommendationsState)
+            <div className="space-y-4">
+              {/* Selection Controls */}
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <CardTitle className="text-lg">Data Cleaning Recommendations</CardTitle>
+                      <CardDescription>Easy-to-understand suggestions to improve your data quality</CardDescription>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setSelectedRecommendations(new Set())}>
+                        Clear Selection
+                      </Button>
+                      <Button onClick={applySelectedRecommendations} disabled={selectedRecommendations.size === 0}>
+                        Apply Selected ({selectedRecommendations.size})
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+              </Card>
+
+              {/* Recommendations List */}
+              {cleaningRecommendations.map((recommendation) => (
+                <Card key={recommendation.id} className="overflow-hidden">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          checked={selectedRecommendations.has(recommendation.id)}
+                          onCheckedChange={(checked) => {
+                            const newSet = new Set(selectedRecommendations)
+                            if (checked) {
+                              newSet.add(recommendation.id)
+                            } else {
+                              newSet.delete(recommendation.id)
+                            }
+                            setSelectedRecommendations(newSet)
+                          }}
+                        />
+                        <div>
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            {recommendation.impact === "high" && <AlertTriangle className="h-5 w-5 text-red-500" />}
+                            {recommendation.impact === "medium" && <Info className="h-5 w-5 text-yellow-500" />}
+                            {recommendation.impact === "low" && <CheckCircle className="h-5 w-5 text-green-500" />}
+                            {recommendation.title}
+                          </CardTitle>
+                          <CardDescription className="mt-2 text-base">
+                            {recommendation.userFriendlyExplanation}
+                          </CardDescription>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-2">
+                        <Badge
+                          variant={
+                            recommendation.impact === "high"
+                              ? "destructive"
+                              : recommendation.impact === "medium"
+                                ? "default"
+                                : "secondary"
+                          }
+                        >
+                          {recommendation.impact} priority
+                        </Badge>
+                        <Badge variant="outline">{Math.round(recommendation.confidence * 100)}% confident</Badge>
+                      </div>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent>
+                    <div className="space-y-4">
+                      {/* Business Impact */}
+                      <div className="bg-blue-50 p-4 rounded-lg">
+                        <h4 className="font-medium text-blue-900 mb-2">Why This Matters for Your Business</h4>
+                        <p className="text-blue-800 text-sm">{recommendation.businessImpact}</p>
+                      </div>
+
+                      {/* Step by Step Guide */}
+                      {recommendation.stepByStepGuide && recommendation.stepByStepGuide.length > 0 && (
+                        <div>
+                          <h4 className="font-medium mb-2">How to Fix This (Step by Step)</h4>
+                          <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
+                            {recommendation.stepByStepGuide.map((step, index) => (
+                              <li key={index}>{step}</li>
+                            ))}
+                          </ol>
+                        </div>
+                      )}
+
+                      {/* Preview and Stats */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+                        <div>
+                          <Label className="text-sm font-medium">What Will Change</Label>
+                          <p className="text-sm text-gray-600 mt-1">{recommendation.preview}</p>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Affected Records</Label>
+                          <p className="text-sm text-gray-600 mt-1">
+                            {recommendation.affectedRows.toLocaleString()} out of {file.data.length.toLocaleString()}{" "}
+                            records
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Code Examples (Collapsible) */}
+                      <details className="border rounded p-3">
+                        <summary className="cursor-pointer font-medium text-sm">
+                          View Technical Implementation (Optional)
+                        </summary>
+                        <Tabs defaultValue="python" className="w-full mt-3">
+                          <TabsList>
+                            <TabsTrigger value="python">Python Code</TabsTrigger>
+                            <TabsTrigger value="sql">SQL Code</TabsTrigger>
+                          </TabsList>
+                          <TabsContent value="python">
+                            <pre className="bg-gray-100 p-3 rounded text-xs overflow-x-auto">
+                              <code>{recommendation.code.python}</code>
+                            </pre>
+                          </TabsContent>
+                          <TabsContent value="sql">
+                            <pre className="bg-gray-100 p-3 rounded text-xs overflow-x-auto">
+                              <code>{recommendation.code.sql}</code>
+                            </pre>
+                          </TabsContent>
+                        </Tabs>
+                      </details>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           )}
         </TabsContent>
 
-        {/* ─────────────── Insights */}
-        <TabsContent value="insights">
-          {insightsState.length === 0 ? (
+        {/* Business Insights Tab */}
+        <TabsContent value="insights" className="space-y-4">
+          {businessInsights.length === 0 ? (
             <Card>
-              <CardContent className="p-6 text-center">
-                <p>No insights yet.</p>
+              <CardContent className="flex items-center justify-center h-64">
+                <div className="text-center">
+                  <Lightbulb className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 mb-4">No business insights yet</p>
+                  <Button onClick={generateAiAnalysis} disabled={isAnalyzing}>
+                    <Brain className="h-4 w-4 mr-2" />
+                    Generate Insights
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ) : (
-            list(insightsState)
+            <div className="space-y-4">
+              {businessInsights.map((insight) => (
+                <Card key={insight.id}>
+                  <CardHeader>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          {insight.priority === "critical" && <AlertTriangle className="h-5 w-5 text-red-500" />}
+                          {insight.priority === "high" && <AlertTriangle className="h-5 w-5 text-orange-500" />}
+                          {insight.priority === "medium" && <Info className="h-5 w-5 text-yellow-500" />}
+                          {insight.priority === "low" && <CheckCircle className="h-5 w-5 text-green-500" />}
+                          {insight.title}
+                        </CardTitle>
+                        <CardDescription className="mt-2 text-base">{insight.userFriendlyExplanation}</CardDescription>
+                      </div>
+                      <Badge
+                        variant={
+                          insight.priority === "critical"
+                            ? "destructive"
+                            : insight.priority === "high"
+                              ? "destructive"
+                              : insight.priority === "medium"
+                                ? "default"
+                                : "secondary"
+                        }
+                      >
+                        {insight.priority} priority
+                      </Badge>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent>
+                    <div className="space-y-4">
+                      {/* Business Impact */}
+                      <div className="bg-yellow-50 p-4 rounded-lg">
+                        <h4 className="font-medium text-yellow-900 mb-2">Business Impact</h4>
+                        <p className="text-yellow-800 text-sm">{insight.impact}</p>
+                      </div>
+
+                      {/* Recommendation */}
+                      <div className="bg-green-50 p-4 rounded-lg">
+                        <h4 className="font-medium text-green-900 mb-2">What You Should Do</h4>
+                        <p className="text-green-800 text-sm">{insight.recommendation}</p>
+                      </div>
+
+                      {/* Action Items */}
+                      {insight.actionItems && insight.actionItems.length > 0 && (
+                        <div>
+                          <h4 className="font-medium mb-2">Specific Action Steps</h4>
+                          <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+                            {insight.actionItems.map((action, index) => (
+                              <li key={index}>{action}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Metrics */}
+                      {insight.metrics && (
+                        <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+                          <div className="text-center">
+                            <p className="text-2xl font-bold text-red-600">{insight.metrics.before}%</p>
+                            <p className="text-xs text-gray-500">Current State</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-2xl font-bold text-green-600">{insight.metrics.after}%</p>
+                            <p className="text-xs text-gray-500">After Improvements</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-2xl font-bold text-blue-600">+{insight.metrics.improvement}%</p>
+                            <p className="text-xs text-gray-500">Improvement</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           )}
         </TabsContent>
 
-        {/* ─────────────── Ask AI */}
-        <TabsContent value="ask">
+        {/* Custom Analysis Tab */}
+        <TabsContent value="custom" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Ask a question</CardTitle>
-              <CardDescription>Works offline with a smaller knowledge base.</CardDescription>
+              <CardTitle>Ask the AI Assistant</CardTitle>
+              <CardDescription>
+                Ask any question about your data in plain English. The AI will provide easy-to-understand answers.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="prompt">Your question</Label>
-                <Input
-                  id="prompt"
-                  value={customPromptState}
-                  onChange={(e) => setCustomPromptState(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && answerPromptState()}
-                  placeholder="e.g. Why does missing data matter?"
-                />
-              </div>
-              <Button onClick={answerPromptState} disabled={!customPromptState.trim()}>
-                <Brain className="h-4 w-4 mr-2" /> Get answer
-              </Button>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="customPrompt">Your Question</Label>
+                  <Input
+                    id="customPrompt"
+                    placeholder="e.g., 'How can I improve my data quality?' or 'What should I fix first?'"
+                    value={customPrompt}
+                    onChange={(e) => setCustomPrompt(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && generateCustomAnalysis()}
+                  />
+                </div>
 
-              {customAnswerState && (
-                <ScrollArea className="h-40 border rounded-md p-3 text-sm">{customAnswerState}</ScrollArea>
-              )}
+                <Button
+                  onClick={generateCustomAnalysis}
+                  disabled={!customPrompt.trim() || isCustomAnalyzing}
+                  className="w-full"
+                >
+                  <Brain className="h-4 w-4 mr-2" />
+                  {isCustomAnalyzing ? "Thinking..." : "Get Answer"}
+                </Button>
+
+                {customAnalysis && (
+                  <Card className="mt-4">
+                    <CardHeader>
+                      <CardTitle className="text-lg">AI Response</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ScrollArea className="h-64">
+                        <div className="whitespace-pre-wrap text-sm">{customAnalysis}</div>
+                      </ScrollArea>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* ─────────────── Learn */}
-        <TabsContent value="learn">
+        {/* Knowledge Base Tab */}
+        <TabsContent value="knowledge" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Why clean data?</CardTitle>
-              <CardDescription>Quick facts for non-technical users</CardDescription>
+              <CardTitle>Data Quality Learning Center</CardTitle>
+              <CardDescription>Learn about data quality concepts and best practices in simple terms</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4 text-sm">
-              <p>
-                High-quality data is like fresh ingredients in cooking – the better the input, the better the outcome.
-                Clean data leads to accurate reports and smarter decisions.
-              </p>
-              <ul className="space-y-2 pl-5 list-disc">
-                <li>
-                  <CheckCircle className="inline h-4 w-4 text-green-600 mr-1" />
-                  Better customer insights
-                </li>
-                <li>
-                  <CheckCircle className="inline h-4 w-4 text-green-600 mr-1" />
-                  Cost savings by avoiding bad decisions
-                </li>
-                <li>
-                  <AlertTriangle className="inline h-4 w-4 text-yellow-500 mr-1" />
-                  Reduced risk of compliance issues
-                </li>
-              </ul>
+            <CardContent>
+              <div className="space-y-4">
+                {Object.entries(LOCAL_KNOWLEDGE_BASE.dataQualityRules).map(([key, rule]) => (
+                  <Card key={key}>
+                    <CardHeader>
+                      <CardTitle className="text-lg">{rule.title}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        <p className="text-gray-700">{rule.explanation}</p>
+
+                        <div className="bg-red-50 p-3 rounded">
+                          <h4 className="font-medium text-red-900 mb-1">Business Impact</h4>
+                          <p className="text-red-800 text-sm">{rule.businessImpact}</p>
+                        </div>
+
+                        <div>
+                          <h4 className="font-medium mb-2">Common Causes</h4>
+                          <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+                            {rule.commonCauses.map((cause, index) => (
+                              <li key={index}>{cause}</li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div>
+                          <h4 className="font-medium mb-2">Solutions</h4>
+                          <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+                            {rule.solutions.map((solution, index) => (
+                              <li key={index}>{solution}</li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div className="bg-green-50 p-3 rounded">
+                          <h4 className="font-medium text-green-900 mb-1">Prevention Tips</h4>
+                          <ul className="list-disc list-inside text-green-800 text-sm space-y-1">
+                            {rule.preventionTips.map((tip, index) => (
+                              <li key={index}>{tip}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
