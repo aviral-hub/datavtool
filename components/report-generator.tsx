@@ -12,6 +12,7 @@ import type { FileData } from "@/app/page"
 import { Download, Mail } from "lucide-react"
 import jsPDF from "jspdf"
 import "jspdf-autotable"
+import autoTable from "jspdf-autotable"
 
 interface ReportGeneratorProps {
   file: FileData
@@ -123,7 +124,7 @@ export function ReportGenerator({ file }: ReportGeneratorProps) {
         doc.setFontSize(12)
         doc.text("Null Values by Column:", 20, yPosition)
         yPosition += 5
-        ;(doc as any).autoTable({
+        autoTable(doc, {
           startY: yPosition,
           head: [["Column", "Null Count", "Percentage"]],
           body: nullData.slice(0, 10), // Limit to first 10 columns
