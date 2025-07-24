@@ -31,6 +31,27 @@ import {
 } from "lucide-react"
 
 /**
+ * Attempt to parse text as JSON.
+ * If the text contains extra prose, grab the first {...} block.
+ */
+function safeJSONParse<T = any>(text: string): T {
+  try {
+    // First try the whole string
+    return JSON.parse(text) as T
+  } catch {
+    // Fallback: extract the first {...} pair
+    const start = text.indexOf("{")
+    const end = text.lastIndexOf("}")
+    if (start !== -1 && end !== -1 && end > start) {
+      const maybeJson = text.substring(start, end + 1)
+      return JSON.parse(maybeJson) as T
+    }
+    // Still no luck – rethrow to trigger local-knowledge fallback
+    throw new Error("Could not locate valid JSON in LLM response")
+  }
+}
+
+/**
  * Props for the AiDataAssistant component
  */
 interface AiDataAssistantProps {
@@ -604,7 +625,11 @@ Focus on practical, business-focused explanations that anyone can understand. Us
         maxTokens: 3000,
       })
 
-      const aiResponse = JSON.parse(text)
+      const aiResponse = safeJSONParse<{ recommendations: any[] }>(text)
+      if (!aiResponse?.recommendations?.length) {
+        throw new Error("No recommendations field in AI response")
+      }
+
       const recommendations: CleaningRecommendation[] = aiResponse.recommendations.map((rec: any) => ({
         id: rec.id || `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         title: rec.title,
@@ -628,6 +653,7 @@ Focus on practical, business-focused explanations that anyone can understand. Us
       setCleaningRecommendations(recommendations)
     } catch (error) {
       console.error("Error generating AI recommendations:", error)
+      toast.error("AI response was not valid JSON – falling back to local knowledge")
       throw error
     }
   }, [])
@@ -681,7 +707,11 @@ Focus on:
         maxTokens: 2500,
       })
 
-      const aiResponse = JSON.parse(text)
+      const aiResponse = safeJSONParse<{ insights: any[] }>(text)
+      if (!aiResponse?.insights?.length) {
+        throw new Error("No insights field in AI response")
+      }
+
       const insights: BusinessInsight[] = aiResponse.insights.map((insight: any) => ({
         id: insight.id || `insight_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         title: insight.title,
@@ -699,6 +729,7 @@ Focus on:
       setBusinessInsights(insights)
     } catch (error) {
       console.error("Error generating business insights:", error)
+      toast.error("AI response was not valid JSON – falling back to local knowledge")
       throw error
     }
   }, [])
