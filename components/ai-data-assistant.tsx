@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react"
 import type { FileData } from "@/app/page"
-import { generateText } from "ai"
 import { toast } from "sonner"
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
@@ -559,168 +558,19 @@ WHERE id IN (
    * Generate AI-powered cleaning recommendations with user-friendly explanations
    */
   const generateCleaningRecommendations = useCallback(async (dataSummary: any) => {
-    const prompt = `You are a friendly data consultant explaining to a business owner (not a technical person) how to improve their data. Use simple, clear language and focus on business impact.
-
-Dataset: ${dataSummary.fileName}
-- ${dataSummary.totalRows} rows of data
-- ${dataSummary.totalColumns} different types of information
-- Current quality score: ${dataSummary.qualityScore}%
-
-Problems found:
-${Object.entries(dataSummary.nullValues)
-  .map(([col, count]) => `- ${col}: ${count} missing values`)
-  .join("\n")}
-${dataSummary.duplicates > 0 ? `- ${dataSummary.duplicates} duplicate records` : ""}
-
-Sample data columns: ${dataSummary.headers.join(", ")}
-
-Provide 4-6 recommendations in JSON format. For each recommendation, explain:
-1. What the problem is in simple terms (like explaining to a friend)
-2. Why it matters for business success
-3. How to fix it step-by-step
-4. What the result will look like
-5. How long it will take and how difficult it is
-
-Format:
-{
-  "recommendations": [
-    {
-      "id": "unique_id",
-      "title": "Simple, clear title",
-      "description": "Brief technical description",
-      "userFriendlyExplanation": "Explain like talking to a business owner who isn't technical - use analogies and simple language",
-      "impact": "low|medium|high",
-      "confidence": 0.95,
-      "affectedRows": 150,
-      "category": "missing_data|duplicates|outliers|formatting|validation",
-      "businessImpact": "How this affects business decisions, revenue, customers, etc.",
-      "stepByStepGuide": ["Step 1: Clear action", "Step 2: Clear action", "Step 3: Clear action"],
-      "estimatedTimeToFix": "15 minutes|1 hour|half day",
-      "difficulty": "easy|medium|hard",
-      "pythonCode": "# Code with clear comments explaining what each line does",
-      "sqlCode": "-- SQL with explanations",
-      "preview": "What will change after applying this fix"
-    }
-  ]
-}
-
-Focus on practical, business-focused explanations that anyone can understand. Use analogies and real-world examples.`
-
-    try {
-      const { text } = await generateText({
-        model: "groq/llama-3.1-8b-instant",
-        prompt,
-        maxTokens: 3000,
-      })
-
-      const aiResponse = safeJSONParse<{ recommendations: any[] }>(text)
-      if (!aiResponse?.recommendations?.length) {
-        throw new Error("No recommendations field in AI response")
-      }
-
-      const recommendations: CleaningRecommendation[] = aiResponse.recommendations.map((rec: any) => ({
-        id: rec.id || `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        title: rec.title,
-        description: rec.description,
-        userFriendlyExplanation: rec.userFriendlyExplanation,
-        impact: rec.impact,
-        confidence: rec.confidence,
-        affectedRows: rec.affectedRows,
-        category: rec.category,
-        businessImpact: rec.businessImpact,
-        stepByStepGuide: rec.stepByStepGuide || [],
-        estimatedTimeToFix: rec.estimatedTimeToFix || "30 minutes",
-        difficulty: rec.difficulty || "medium",
-        code: {
-          python: rec.pythonCode,
-          sql: rec.sqlCode,
-        },
-        preview: rec.preview,
-      }))
-
-      setCleaningRecommendations(recommendations)
-    } catch (error) {
-      console.error("Error generating AI recommendations:", error)
-      toast.error("AI response was not valid JSON – falling back to local knowledge")
-      throw error
-    }
-  }, [])
+    const localRecs = generateLocalRecommendations(dataSummary)
+    setCleaningRecommendations(localRecs)
+    toast.success("Generated recommendations using built-in expertise")
+  }, [generateLocalRecommendations])
 
   /**
    * Generate business insights with user-friendly explanations
    */
   const generateBusinessInsights = useCallback(async (dataSummary: any) => {
-    const prompt = `You are a business consultant explaining data insights to a company owner. Use simple language and focus on business impact, not technical details.
-
-Dataset: ${dataSummary.fileName}
-- ${dataSummary.totalRows} records
-- Quality score: ${dataSummary.qualityScore}%
-- ${Object.values(dataSummary.nullValues).reduce((sum: number, count: any) => sum + count, 0)} missing values
-- ${dataSummary.duplicates} duplicates
-
-Provide 4-5 business insights in JSON format:
-{
-  "insights": [
-    {
-      "id": "unique_id",
-      "title": "Business-focused insight title",
-      "description": "Brief technical description",
-      "userFriendlyExplanation": "Explain the business impact in simple terms with analogies",
-      "impact": "How this affects the business (revenue, customers, operations, etc.)",
-      "recommendation": "What the business should do about it",
-      "priority": "low|medium|high|critical",
-      "timeline": "When this should be addressed",
-      "costBenefit": "Cost of fixing vs cost of not fixing",
-      "actionItems": ["Specific action 1", "Specific action 2", "Specific action 3"],
-      "metrics": {
-        "before": 75,
-        "after": 90,
-        "improvement": 15
-      }
-    }
-  ]
-}
-
-Focus on:
-- Revenue impact and cost savings
-- Customer satisfaction and retention
-- Operational efficiency improvements
-- Risk management and compliance
-- Competitive advantages from better data`
-
-    try {
-      const { text } = await generateText({
-        model: "groq/llama-3.1-8b-instant",
-        prompt,
-        maxTokens: 2500,
-      })
-
-      const aiResponse = safeJSONParse<{ insights: any[] }>(text)
-      if (!aiResponse?.insights?.length) {
-        throw new Error("No insights field in AI response")
-      }
-
-      const insights: BusinessInsight[] = aiResponse.insights.map((insight: any) => ({
-        id: insight.id || `insight_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        title: insight.title,
-        description: insight.description,
-        userFriendlyExplanation: insight.userFriendlyExplanation,
-        impact: insight.impact,
-        recommendation: insight.recommendation,
-        priority: insight.priority,
-        timeline: insight.timeline || "Within 1 month",
-        costBenefit: insight.costBenefit || "Investment in data quality pays off through better decisions",
-        metrics: insight.metrics,
-        actionItems: insight.actionItems || [],
-      }))
-
-      setBusinessInsights(insights)
-    } catch (error) {
-      console.error("Error generating business insights:", error)
-      toast.error("AI response was not valid JSON – falling back to local knowledge")
-      throw error
-    }
-  }, [])
+    const localInsights = generateLocalInsights(dataSummary)
+    setBusinessInsights(localInsights)
+    toast.success("Generated insights using built-in expertise")
+  }, [generateLocalInsights])
 
   /**
    * Generate custom analysis based on user prompt
@@ -731,58 +581,16 @@ Focus on:
     setIsCustomAnalyzing(true)
 
     try {
-      if (!isOnline) {
-        // Use local knowledge-based response
-        const localResponse = getLocalResponse(customPrompt)
-        setCustomAnalysis(localResponse)
-        toast.success("Response generated using local knowledge!")
-        return
-      }
-
-      const dataSummary = {
-        fileName: file.name,
-        totalRows: file.data.length,
-        headers: file.headers,
-        sampleData: file.data.slice(0, 3),
-        qualityScore: file.analysis?.qualityScore || 0,
-      }
-
-      const prompt = `You are a friendly data consultant. A business owner asked: "${customPrompt}"
-
-Their dataset:
-- File: ${dataSummary.fileName}
-- ${dataSummary.totalRows} rows
-- Columns: ${dataSummary.headers.join(", ")}
-- Quality Score: ${dataSummary.qualityScore}%
-
-Provide a helpful, easy-to-understand response that:
-1. Answers their question directly in simple terms
-2. Explains any technical concepts using analogies and real-world examples
-3. Gives practical, actionable advice they can implement
-4. Includes specific examples relevant to their data when possible
-5. Focuses on business impact and benefits
-6. Uses encouraging, supportive language
-
-Use friendly, conversational language as if you're talking to a colleague who trusts your expertise but isn't technical.`
-
-      const { text } = await generateText({
-        model: "groq/llama-3.1-8b-instant",
-        prompt,
-        maxTokens: 1500,
-      })
-
-      setCustomAnalysis(text)
-      toast.success("Custom analysis generated!")
-    } catch (error) {
-      console.error("Error generating custom analysis:", error)
-      // Fallback to local knowledge
       const localResponse = getLocalResponse(customPrompt)
       setCustomAnalysis(localResponse)
-      toast.info("Using local knowledge due to connection issues")
+      toast.success("Response generated using built-in knowledge!")
+    } catch (error) {
+      console.error("Error generating custom analysis:", error)
+      toast.error("Failed to generate analysis")
     } finally {
       setIsCustomAnalyzing(false)
     }
-  }, [customPrompt, file, isCustomAnalyzing, isOnline, getLocalResponse])
+  }, [customPrompt, getLocalResponse, isCustomAnalyzing])
 
   /**
    * Apply selected cleaning recommendations
