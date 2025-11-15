@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react"
 import type { FileData } from "@/app/page"
-import { groq } from "@ai-sdk/groq"
 import { generateText } from "ai"
 import { toast } from "sonner"
 
@@ -17,18 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 
-import {
-  Brain,
-  Wand2,
-  Download,
-  Wifi,
-  WifiOff,
-  Lightbulb,
-  BookOpen,
-  CheckCircle,
-  AlertTriangle,
-  Info,
-} from "lucide-react"
+import { Brain, Wand2, Download, Wifi, WifiOff, Lightbulb, BookOpen, CheckCircle, AlertTriangle, Info } from 'lucide-react'
 
 /**
  * Attempt to parse text as JSON.
@@ -620,7 +608,7 @@ Focus on practical, business-focused explanations that anyone can understand. Us
 
     try {
       const { text } = await generateText({
-        model: groq("llama-3.1-8b-instant"),
+        model: "groq/llama-3.1-8b-instant",
         prompt,
         maxTokens: 3000,
       })
@@ -702,7 +690,7 @@ Focus on:
 
     try {
       const { text } = await generateText({
-        model: groq("llama-3.1-8b-instant"),
+        model: "groq/llama-3.1-8b-instant",
         prompt,
         maxTokens: 2500,
       })
@@ -778,7 +766,7 @@ Provide a helpful, easy-to-understand response that:
 Use friendly, conversational language as if you're talking to a colleague who trusts your expertise but isn't technical.`
 
       const { text } = await generateText({
-        model: groq("llama-3.1-8b-instant"),
+        model: "groq/llama-3.1-8b-instant",
         prompt,
         maxTokens: 1500,
       })

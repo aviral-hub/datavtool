@@ -22,23 +22,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  Trash2,
-  Wand2,
-  Eye,
-  Undo,
-  CheckCircle,
-  Filter,
-  Search,
-  RefreshCw,
-  Sparkles,
-  Target,
-  Columns,
-  RowsIcon,
-  Settings,
-  Info,
-  Play,
-} from "lucide-react"
+import { Trash2, Wand2, Eye, Undo, CheckCircle, Filter, Search, RefreshCw, Sparkles, Target, Columns, RowsIcon, Settings, Info, Play, Download } from 'lucide-react'
 import { toast } from "sonner"
 import type { FileData } from "@/app/page"
 
@@ -385,11 +369,6 @@ export default function InteractiveDataCleaner({ file, onFileUpdate }: Interacti
     })
   }, [file.data, searchTerm, filterColumn])
 
-  // Generate suggestions on component mount
-  React.useEffect(() => {
-    generateCleaningSuggestions()
-  }, [generateCleaningSuggestions])
-
   // Data quality metrics
   const dataQualityMetrics = useMemo(() => {
     if (!file.data || !file.headers) return null
@@ -416,6 +395,105 @@ export default function InteractiveDataCleaner({ file, onFileUpdate }: Interacti
     }
   }, [file, findDuplicateRows])
 
+  const exportCleanedData = useCallback(() => {
+    try {
+      const csvContent = [
+        file.headers.join(","),
+        ...file.data.map((row) =>
+          file.headers
+            .map((header) => {
+              const value = row[header]
+              if (value === null || value === undefined) return ""
+              const stringValue = String(value)
+              // Escape quotes and wrap in quotes if contains comma or quotes
+              return stringValue.includes(",") || stringValue.includes('"')
+                ? `"${stringValue.replace(/"/g, '""')}"`
+                : stringValue
+            })
+            .join(","),
+        ),
+      ].join("\n")
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${file.name.replace(/\.[^/.]+$/, "")}_cleaned.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      toast.success("✅ Cleaned data exported successfully!")
+    } catch (error) {
+      toast.error("Failed to export cleaned data")
+      console.error(error)
+    }
+  }, [file])
+
+  const exportCleaningReport = useCallback(() => {
+    try {
+      const report = {
+        fileName: file.name,
+        exportDate: new Date().toISOString(),
+        dataQuality: dataQualityMetrics,
+        cleaningActions: {
+          total: cleaningActions.length,
+          applied: cleaningActions.filter((a) => a.applied).length,
+          byCategory: cleaningActions.reduce(
+            (acc, action) => {
+              acc[action.category] = (acc[action.category] || 0) + 1
+              return acc
+            },
+            {} as Record<string, number>,
+          ),
+          byImpact: cleaningActions.reduce(
+            (acc, action) => {
+              acc[action.impact] = (acc[action.impact] || 0) + 1
+              return acc
+            },
+            {} as Record<string, number>,
+          ),
+          details: cleaningActions.map((action) => ({
+            description: action.description,
+            type: action.type,
+            column: action.column,
+            applied: action.applied,
+            impact: action.impact,
+            category: action.category,
+          })),
+        },
+        summary: {
+          totalRows: file.data.length,
+          totalColumns: file.headers.length,
+          selectedRows: selectedRows.size,
+          selectedColumns: selectedColumns.size,
+          undoStepsAvailable: undoStack.length,
+        },
+      }
+
+      const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${file.name.replace(/\.[^/.]+$/, "")}_cleaning_report.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      toast.success("✅ Cleaning report exported successfully!")
+    } catch (error) {
+      toast.error("Failed to export cleaning report")
+      console.error(error)
+    }
+  }, [file, cleaningActions, dataQualityMetrics, selectedRows, selectedColumns, undoStack])
+
+  // Generate suggestions on component mount
+  React.useEffect(() => {
+    generateCleaningSuggestions()
+  }, [generateCleaningSuggestions])
+
   return (
     <div className="space-y-6">
       {/* Header with metrics */}
@@ -438,6 +516,57 @@ export default function InteractiveDataCleaner({ file, onFileUpdate }: Interacti
                 <RefreshCw className="h-4 w-4 mr-1" />
                 Refresh
               </Button>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                    <Download className="h-4 w-4 mr-1" />
+                    Export
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Export Cleaned Data</DialogTitle>
+                    <DialogDescription>Choose what you want to export from your cleaned dataset</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-3">
+                      <Button onClick={exportCleanedData} className="w-full justify-start" variant="outline">
+                        <Download className="h-4 w-4 mr-2" />
+                        <div className="text-left">
+                          <div className="font-medium">Export Cleaned Data (CSV)</div>
+                          <div className="text-xs text-gray-500">Download the cleaned dataset as CSV file</div>
+                        </div>
+                      </Button>
+
+                      <Button onClick={exportCleaningReport} className="w-full justify-start" variant="outline">
+                        <Download className="h-4 w-4 mr-2" />
+                        <div className="text-left">
+                          <div className="font-medium">Export Cleaning Report (JSON)</div>
+                          <div className="text-xs text-gray-500">
+                            Download a detailed report of all cleaning actions
+                          </div>
+                        </div>
+                      </Button>
+                    </div>
+
+                    <div className="border-t pt-4">
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <p>
+                          <strong>Current Data:</strong> {file.data.length} rows, {file.headers.length} columns
+                        </p>
+                        <p>
+                          <strong>Actions Applied:</strong> {cleaningActions.filter((a) => a.applied).length} of{" "}
+                          {cleaningActions.length}
+                        </p>
+                        <p>
+                          <strong>Quality Score:</strong> {dataQualityMetrics?.completeness}% completeness,{" "}
+                          {dataQualityMetrics?.uniqueness}% uniqueness
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </CardHeader>
